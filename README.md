@@ -1,14 +1,15 @@
 # Tripmates
 
-Tripmates is a lightweight Expo app for a small group of friends to collect travel ideas, practical guides, day plans, and post-trip memories in one shared place.
+Tripmates is a lightweight Expo app for a small group of friends to build a private city-by-city travel library: ideas, practical guides, day plans, and post-trip memories all live under each city card.
 
 ## Current MVP
 
 - One Expo / React Native codebase for iOS and Android.
+- City-card home screen with a detail page for each city.
 - Four travel boards: ideas, guides, itinerary, and memories.
-- Seed content for a Kyoto / Osaka / Nara trip.
+- Seed city cards for Kyoto, Osaka, and Nara.
 - Local persistent card creation with AsyncStorage.
-- Optional Supabase login, trip sync, and invite-code join flow.
+- Optional Supabase login, city sync, and invite-code join flow.
 - Mobile-first UI that runs in Expo Go while the product shape is still changing.
 
 ## Why Not Ionic?
@@ -43,7 +44,7 @@ npm run typecheck
 4. Fill in `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 5. Restart Expo so the public environment variables are bundled.
 
-Without these environment variables, Tripmates stays in local-only mode and still saves entries on the device.
+Without these environment variables, Tripmates stays in local-only mode and still saves city cards and entries on the device.
 
 ## Distribution Path
 
@@ -53,6 +54,6 @@ Android can start with a signed APK once native builds are configured. iOS shoul
 
 1. Smoke test Supabase auth on a physical iOS and Android device.
 2. Replace manual sync with realtime updates and conflict handling.
-3. Add generated invite links that open a specific trip in the app.
+3. Add generated invite links that open a specific city in the app.
 4. Add maps, link previews, and photo memories.
 5. Configure EAS Build for Android APK / AAB and iOS TestFlight builds.

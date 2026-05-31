@@ -28,7 +28,7 @@ export type TripSpace = {
 };
 
 export type LocalTripState = {
-  version: 1;
+  version: 2;
   activeTripId: string;
   trips: TripSpace[];
   entries: TripEntry[];

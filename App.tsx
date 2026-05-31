@@ -23,7 +23,7 @@ import {
   subscribeToAuthChanges,
 } from './src/services/tripSync';
 import { loadLocalTripState, saveLocalTripState } from './src/storage/localTripStore';
-import { EntryKind, LocalTripState, TripEntry } from './src/types';
+import { EntryKind, LocalTripState, TripEntry, TripSpace } from './src/types';
 
 const tabs: Array<{ key: EntryKind; label: string }> = [
   { key: 'idea', label: '灵感' },
@@ -48,6 +48,7 @@ const syncLabels: Record<TripEntry['syncStatus'], string> = {
 };
 
 export default function App() {
+  const [screen, setScreen] = useState<'home' | 'detail'>('home');
   const [activeTab, setActiveTab] = useState<EntryKind>('idea');
   const [tripState, setTripState] = useState<LocalTripState>(defaultLocalState);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -60,6 +61,8 @@ export default function App() {
   const [draftTitle, setDraftTitle] = useState('');
   const [draftNote, setDraftNote] = useState('');
   const [draftTag, setDraftTag] = useState(tags[0]);
+  const [cityName, setCityName] = useState('');
+  const [cityFocus, setCityFocus] = useState('');
   const [email, setEmail] = useState('');
   const [inviteCode, setInviteCode] = useState('');
 
@@ -154,16 +157,67 @@ export default function App() {
   );
 
   const counts = useMemo(
-    () =>
-      tabs.reduce(
-        (memo, tab) => ({
-          ...memo,
-          [tab.key]: entriesForTrip.filter((entry) => entry.kind === tab.key).length,
-        }),
-        {} as Record<EntryKind, number>,
-      ),
-    [entriesForTrip],
+    () => getCountsForTrip(activeTrip.id, tripState.entries),
+    [activeTrip.id, tripState.entries],
   );
+
+  const cityCards = useMemo(
+    () =>
+      tripState.trips.map((trip) => ({
+        trip,
+        counts: getCountsForTrip(trip.id, tripState.entries),
+        latestEntry: tripState.entries.find((entry) => entry.tripId === trip.id),
+      })),
+    [tripState.entries, tripState.trips],
+  );
+
+  function openTrip(tripId: string) {
+    setTripState((current) => ({
+      ...current,
+      activeTripId: tripId,
+    }));
+    setActiveTab('idea');
+    setScreen('detail');
+  }
+
+  function addCity() {
+    const title = cityName.trim();
+    const destination = cityFocus.trim();
+
+    if (!title) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    const fallbackSlug = Math.random().toString(36).slice(2, 8);
+    const tripId = `city-${slug || fallbackSlug}-${Date.now()}`;
+    const codeStem = slug ? slug.replace(/-/g, '').slice(0, 6).toUpperCase() : 'CITY';
+    const inviteCode = `${codeStem}${Math.floor(Math.random() * 90 + 10)}`;
+    const nextTrip: TripSpace = {
+      id: tripId,
+      title,
+      destination: destination || '待整理',
+      dateRange: '城市资料库',
+      inviteCode,
+      members: [session?.user.email ?? '我'],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setTripState((current) => ({
+      ...current,
+      activeTripId: nextTrip.id,
+      trips: [nextTrip, ...current.trips],
+    }));
+    setCityName('');
+    setCityFocus('');
+    setActiveTab('idea');
+    setScreen('detail');
+  }
 
   function addEntry() {
     const title = draftTitle.trim();
@@ -241,12 +295,12 @@ export default function App() {
     }
 
     setIsRemoteBusy(true);
-    setRemoteMessage('正在同步旅行空间');
+    setRemoteMessage('正在同步城市空间');
 
     try {
       const syncedState = await pushActiveTrip(tripState, session);
       setTripState(syncedState);
-      setRemoteMessage('当前旅行已同步');
+      setRemoteMessage('当前城市已同步');
     } catch (error) {
       setTripState((current) => ({
         ...current,
@@ -276,12 +330,12 @@ export default function App() {
     }
 
     setIsRemoteBusy(true);
-    setRemoteMessage('正在加入旅行');
+    setRemoteMessage('正在加入城市');
 
     try {
       const remoteTrip = await joinTripByInvite(code);
       setTripState((current) => ({
-        version: 1,
+        version: 2,
         activeTripId: remoteTrip.trip.id,
         trips: [
           remoteTrip.trip,
@@ -293,7 +347,9 @@ export default function App() {
         ],
       }));
       setInviteCode('');
-      setRemoteMessage('已加入旅行');
+      setActiveTab('idea');
+      setScreen('detail');
+      setRemoteMessage('已加入城市');
     } catch (error) {
       setRemoteMessage(error instanceof Error ? error.message : '加入失败');
     } finally {
@@ -306,8 +362,95 @@ export default function App() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingScreen}>
           <ActivityIndicator color="#152033" />
-          <Text style={styles.loadingText}>读取本地旅行库</Text>
+          <Text style={styles.loadingText}>读取本地城市库</Text>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'home') {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="dark" />
+        <ScrollView contentContainerStyle={styles.screen} showsVerticalScrollIndicator={false}>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.kicker}>Tripmates</Text>
+              <Text style={styles.title}>城市旅行库</Text>
+            </View>
+            <View style={styles.shareBadge}>
+              <Text style={styles.shareBadgeText}>{tripState.trips.length} 城</Text>
+            </View>
+          </View>
+
+          <View style={styles.statusRow}>
+            <Text style={styles.statusPill}>{storageMessage}</Text>
+            <Text style={styles.statusPill}>{remoteMessage}</Text>
+          </View>
+
+          <View style={styles.homeIntro}>
+            <Text style={styles.homeIntroTitle}>先选城市，再整理攻略。</Text>
+            <Text style={styles.homeIntroText}>
+              每座城市都有自己的灵感、攻略、行程和回忆，适合慢慢积累成你和朋友的私人资料库。
+            </Text>
+          </View>
+
+          <View style={styles.cityGrid}>
+            {cityCards.map(({ trip, counts: cityCounts, latestEntry }) => (
+              <Pressable
+                key={trip.id}
+                accessibilityRole="button"
+                onPress={() => openTrip(trip.id)}
+                style={({ pressed }) => [styles.cityCard, pressed && styles.cityCardPressed]}
+              >
+                <View style={styles.cityCardHeader}>
+                  <View style={styles.cityTitleBlock}>
+                    <Text style={styles.cityName}>{trip.title}</Text>
+                    <Text style={styles.cityDestination}>{trip.destination}</Text>
+                  </View>
+                  <Text style={styles.cityMembers}>{trip.members.length} 人</Text>
+                </View>
+                <View style={styles.cityStatsRow}>
+                  <MiniStat label="灵感" value={cityCounts.idea} />
+                  <MiniStat label="攻略" value={cityCounts.guide} />
+                  <MiniStat label="行程" value={cityCounts.plan} />
+                  <MiniStat label="回忆" value={cityCounts.memory} />
+                </View>
+                <Text style={styles.cityLatest} numberOfLines={2}>
+                  {latestEntry ? latestEntry.title : '还没有内容，点开开始整理。'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={styles.composer}>
+            <Text style={styles.sectionLabel}>新增城市</Text>
+            <TextInput
+              value={cityName}
+              onChangeText={setCityName}
+              placeholder="城市名，比如 东京"
+              placeholderTextColor="#8a94a6"
+              style={styles.input}
+            />
+            <TextInput
+              value={cityFocus}
+              onChangeText={setCityFocus}
+              placeholder="这个城市想整理什么，比如 咖啡 / 博物馆 / 住宿区"
+              placeholderTextColor="#8a94a6"
+              style={[styles.input, styles.cityFocusInput]}
+            />
+            <Pressable
+              accessibilityRole="button"
+              onPress={addCity}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.primaryButtonPressed,
+              ]}
+            >
+              <Text style={styles.primaryButtonText}>创建城市卡片</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -321,9 +464,13 @@ export default function App() {
             <Text style={styles.kicker}>Tripmates</Text>
             <Text style={styles.title}>{activeTrip.title}</Text>
           </View>
-          <View style={styles.shareBadge}>
-            <Text style={styles.shareBadgeText}>{activeTrip.members.length} 人</Text>
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setScreen('home')}
+            style={({ pressed }) => [styles.backButton, pressed && styles.secondaryButtonPressed]}
+          >
+            <Text style={styles.backButtonText}>城市</Text>
+          </Pressable>
         </View>
 
         <View style={styles.statusRow}>
@@ -336,7 +483,7 @@ export default function App() {
             <Text style={styles.tripDate}>
               {activeTrip.dateRange} · {activeTrip.destination}
             </Text>
-            <Text style={styles.tripHeadline}>把想去的地方、确认过的信息和路上的瞬间放在一起。</Text>
+            <Text style={styles.tripHeadline}>把这座城市想去的地方、确认过的信息和路上的瞬间放在一起。</Text>
           </View>
           <View style={styles.inviteStrip}>
             <Text style={styles.inviteLabel}>邀请码</Text>
@@ -550,6 +697,26 @@ function Stat({
   );
 }
 
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <View style={styles.miniStat}>
+      <Text style={styles.miniStatValue}>{value}</Text>
+      <Text style={styles.miniStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function getCountsForTrip(tripId: string, entries: TripEntry[]) {
+  return tabs.reduce(
+    (memo, tab) => ({
+      ...memo,
+      [tab.key]: entries.filter((entry) => entry.tripId === tripId && entry.kind === tab.key)
+        .length,
+    }),
+    {} as Record<EntryKind, number>,
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -601,6 +768,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  backButton: {
+    alignItems: 'center',
+    backgroundColor: '#e9eef6',
+    borderRadius: 22,
+    height: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  backButtonText: {
+    color: '#152033',
+    fontSize: 14,
+    fontWeight: '900',
+  },
   statusRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -615,6 +795,101 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 10,
     paddingVertical: 6,
+  },
+  homeIntro: {
+    backgroundColor: '#ffffff',
+    borderColor: '#dfe7f1',
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 16,
+  },
+  homeIntroTitle: {
+    color: '#152033',
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 26,
+  },
+  homeIntroText: {
+    color: '#526071',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 8,
+  },
+  cityGrid: {
+    gap: 12,
+    marginTop: 16,
+  },
+  cityCard: {
+    backgroundColor: '#ffffff',
+    borderColor: '#dfe7f1',
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 16,
+  },
+  cityCardPressed: {
+    backgroundColor: '#f9fbfe',
+  },
+  cityCardHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  cityTitleBlock: {
+    flex: 1,
+  },
+  cityName: {
+    color: '#152033',
+    fontSize: 23,
+    fontWeight: '900',
+    lineHeight: 29,
+  },
+  cityDestination: {
+    color: '#647187',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  cityMembers: {
+    backgroundColor: '#edf2f8',
+    borderRadius: 16,
+    color: '#526071',
+    fontSize: 12,
+    fontWeight: '800',
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  cityStatsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+  },
+  miniStat: {
+    backgroundColor: '#f5f7fb',
+    borderRadius: 8,
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  miniStatValue: {
+    color: '#152033',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  miniStatLabel: {
+    color: '#647187',
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  cityLatest: {
+    color: '#48576b',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+    marginTop: 12,
   },
   tripPanel: {
     backgroundColor: '#ffffff',
@@ -773,6 +1048,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     minHeight: 88,
     textAlignVertical: 'top',
+  },
+  cityFocusInput: {
+    marginTop: 10,
   },
   tagRow: {
     flexDirection: 'row',

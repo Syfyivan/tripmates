@@ -85,7 +85,7 @@ export async function pushActiveTrip(state: LocalTripState, session: Session) {
   const activeTrip = state.trips.find((trip) => trip.id === state.activeTripId);
 
   if (!activeTrip) {
-    throw new Error('没有找到当前旅行空间。');
+    throw new Error('没有找到当前城市空间。');
   }
 
   const now = new Date().toISOString();
@@ -150,7 +150,7 @@ export async function joinTripByInvite(inviteCode: string) {
   }
 
   if (typeof joinedTripId !== 'string') {
-    throw new Error('邀请码没有返回有效的旅行空间。');
+    throw new Error('邀请码没有返回有效的城市空间。');
   }
 
   return fetchRemoteTrip(joinedTripId);
