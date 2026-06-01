@@ -41,10 +41,12 @@ npm run typecheck
 1. Create a Supabase project on the Free plan.
 2. Use a clear project name such as `tripmates`.
 3. Pick the region closest to the people who will use the app most often.
-4. Open the Supabase SQL editor and run `supabase/schema.sql`.
-5. Copy `.env.example` to `.env.local`.
-6. Fill in `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
-7. Restart Expo so the public environment variables are bundled.
+4. Link the CLI with `npx supabase link --project-ref <project-ref>`.
+5. Push the database migration with `npx supabase db push`.
+6. If you prefer the dashboard SQL editor, run `supabase/schema.sql`; it has the same contents as the initial migration.
+7. Copy `.env.example` to `.env.local`.
+8. Fill in `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+9. Restart Expo so the public environment variables are bundled.
 
 Without these environment variables, Tripmates stays in local-only mode and still saves city cards and entries on the device.
 
