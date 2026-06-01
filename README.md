@@ -7,7 +7,7 @@ Tripmates is a lightweight Expo app for a small group of friends to build a priv
 - One Expo / React Native codebase for iOS and Android.
 - City-card home screen with a detail page for each city.
 - Four travel boards: ideas, guides, itinerary, and memories.
-- Seed city cards for Kyoto, Osaka, and Nara.
+- Seed city cards for Xinjiang and Guangxi.
 - Local persistent card creation with AsyncStorage.
 - Optional Supabase login, city sync, and invite-code join flow.
 - Mobile-first UI that runs in Expo Go while the product shape is still changing.
@@ -52,7 +52,37 @@ Without these environment variables, Tripmates stays in local-only mode and stil
 
 ## Distribution Path
 
-Android can start with a signed APK once native builds are configured. iOS should use TestFlight for friends during beta, or an unlisted App Store release once the app is ready for long-term use.
+Android can start with a signed APK through EAS Build. iOS should use TestFlight for friends during beta, or an unlisted App Store release once the app is ready for long-term use.
+
+### Android APK for Friends
+
+The project already has the Android application ID in `app.json`:
+
+```text
+com.syfyivan.tripmates
+```
+
+`eas.json` has a `preview` profile that builds an installable APK instead of a Play Store AAB. The first real cloud build needs an Expo account:
+
+```bash
+npx eas-cli@latest login
+npx eas-cli@latest init
+```
+
+Add the Supabase client variables to the EAS `preview` environment so cloud APK builds can connect to the same backend as local development:
+
+```bash
+npx eas-cli@latest env:create --name EXPO_PUBLIC_SUPABASE_URL --value https://uyrnccoygbgeqvxusdqc.supabase.co --environment preview --visibility plaintext
+npx eas-cli@latest env:create --name EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY --value <publishable-key> --environment preview --visibility plaintext
+```
+
+Then start the APK build:
+
+```bash
+npx eas-cli@latest build --platform android --profile preview
+```
+
+When the build finishes, EAS prints a build page and APK download link. Send that APK link to Android friends and they can install it directly. Android may ask them to allow installation from the browser or file manager.
 
 ## Next Milestones
 
@@ -60,4 +90,4 @@ Android can start with a signed APK once native builds are configured. iOS shoul
 2. Replace manual sync with realtime updates and conflict handling.
 3. Add generated invite links that open a specific city in the app.
 4. Add maps, link previews, and photo memories.
-5. Configure EAS Build for Android APK / AAB and iOS TestFlight builds.
+5. Run the first EAS Android preview build and install the APK on a real phone.
