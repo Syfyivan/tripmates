@@ -1,23 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { defaultLocalState } from '../data/seed';
-import { LocalTripState } from '../types';
+import { LocalCityState } from '../types';
 
 const LOCAL_STATE_KEY = 'tripmates:v2:city-library-state';
 
-export async function loadLocalTripState(): Promise<LocalTripState> {
+export async function loadLocalCityState(): Promise<LocalCityState> {
   const storedValue = await AsyncStorage.getItem(LOCAL_STATE_KEY);
 
   if (!storedValue) {
     return defaultLocalState;
   }
 
-  const parsed = JSON.parse(storedValue) as Partial<LocalTripState>;
+  const parsed = JSON.parse(storedValue) as Partial<LocalCityState>;
 
   if (
     parsed.version !== 2 ||
-    !parsed.activeTripId ||
-    !Array.isArray(parsed.trips) ||
+    !parsed.activeCityId ||
+    !Array.isArray(parsed.cities) ||
     !Array.isArray(parsed.entries)
   ) {
     return defaultLocalState;
@@ -25,16 +25,16 @@ export async function loadLocalTripState(): Promise<LocalTripState> {
 
   return {
     version: 2,
-    activeTripId: parsed.activeTripId,
-    trips: parsed.trips,
+    activeCityId: parsed.activeCityId,
+    cities: parsed.cities,
     entries: parsed.entries,
   };
 }
 
-export async function saveLocalTripState(state: LocalTripState) {
+export async function saveLocalCityState(state: LocalCityState) {
   await AsyncStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(state));
 }
 
-export async function resetLocalTripState() {
+export async function resetLocalCityState() {
   await AsyncStorage.removeItem(LOCAL_STATE_KEY);
 }

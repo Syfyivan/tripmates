@@ -1,8 +1,8 @@
 export type EntryKind = 'idea' | 'guide' | 'plan' | 'memory';
 
-export type TripEntry = {
+export type CityEntry = {
   id: string;
-  tripId: string;
+  cityId: string;
   kind: EntryKind;
   title: string;
   note: string;
@@ -15,7 +15,7 @@ export type TripEntry = {
   syncStatus: 'local' | 'synced' | 'error';
 };
 
-export type TripSpace = {
+export type CitySpace = {
   id: string;
   title: string;
   destination: string;
@@ -27,9 +27,9 @@ export type TripSpace = {
   remoteId?: string;
 };
 
-export type LocalTripState = {
+export type LocalCityState = {
   version: 2;
-  activeTripId: string;
-  trips: TripSpace[];
-  entries: TripEntry[];
+  activeCityId: string;
+  cities: CitySpace[];
+  entries: CityEntry[];
 };

@@ -1,8 +1,8 @@
-import { LocalTripState, TripEntry, TripSpace } from '../types';
+import { LocalCityState, CityEntry, CitySpace } from '../types';
 
 const now = '2026-05-31T00:00:00.000Z';
 
-export const defaultTrips: TripSpace[] = [
+export const defaultCities: CitySpace[] = [
   {
     id: 'city-kyoto',
     title: '京都',
@@ -35,12 +35,12 @@ export const defaultTrips: TripSpace[] = [
   },
 ];
 
-export const defaultTrip = defaultTrips[0];
+export const defaultCity = defaultCities[0];
 
-export const seedEntries: TripEntry[] = [
+export const seedEntries: CityEntry[] = [
   {
     id: 'kyoto-idea-1',
-    tripId: 'city-kyoto',
+    cityId: 'city-kyoto',
     kind: 'idea',
     title: '岚山清晨散步',
     note: '把竹林、渡月桥和一家咖啡店放在同一条慢路线里，避开中午人流。',
@@ -53,7 +53,7 @@ export const seedEntries: TripEntry[] = [
   },
   {
     id: 'kyoto-guide-1',
-    tripId: 'city-kyoto',
+    cityId: 'city-kyoto',
     kind: 'guide',
     title: '关西机场到京都',
     note: 'Haruka 适合直达京都站，提前看 ICOCA 套票和末班车时间。',
@@ -66,7 +66,7 @@ export const seedEntries: TripEntry[] = [
   },
   {
     id: 'kyoto-plan-1',
-    tripId: 'city-kyoto',
+    cityId: 'city-kyoto',
     kind: 'plan',
     title: 'Day 2 京都东山',
     note: '清水寺、二年坂、祇园连成半日线，下午留给鸭川和随机小店。',
@@ -79,7 +79,7 @@ export const seedEntries: TripEntry[] = [
   },
   {
     id: 'kyoto-memory-1',
-    tripId: 'city-kyoto',
+    cityId: 'city-kyoto',
     kind: 'memory',
     title: '鸭川夜散步',
     note: '雨后街灯下的鸭川，比攻略照片还好看。',
@@ -92,7 +92,7 @@ export const seedEntries: TripEntry[] = [
   },
   {
     id: 'osaka-idea-1',
-    tripId: 'city-osaka',
+    cityId: 'city-osaka',
     kind: 'idea',
     title: '中之岛夜景',
     note: '晚饭后散步到河边，顺手把咖啡店和甜品店标成备选。',
@@ -105,7 +105,7 @@ export const seedEntries: TripEntry[] = [
   },
   {
     id: 'osaka-guide-1',
-    tripId: 'city-osaka',
+    cityId: 'city-osaka',
     kind: 'guide',
     title: '难波住宿区域',
     note: '适合吃饭和购物，去京都/奈良时注意换乘时间，不要只看直线距离。',
@@ -118,7 +118,7 @@ export const seedEntries: TripEntry[] = [
   },
   {
     id: 'nara-plan-1',
-    tripId: 'city-nara',
+    cityId: 'city-nara',
     kind: 'plan',
     title: '奈良一日散步线',
     note: '近铁奈良站、东大寺、若草山、春日大社按体力调整，午饭不要排太死。',
@@ -131,9 +131,9 @@ export const seedEntries: TripEntry[] = [
   },
 ];
 
-export const defaultLocalState: LocalTripState = {
+export const defaultLocalState: LocalCityState = {
   version: 2,
-  activeTripId: defaultTrip.id,
-  trips: defaultTrips,
+  activeCityId: defaultCity.id,
+  cities: defaultCities,
   entries: seedEntries,
 };

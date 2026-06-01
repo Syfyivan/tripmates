@@ -16,14 +16,14 @@ import { isSupabaseConfigured } from './src/config/env';
 import { defaultLocalState } from './src/data/seed';
 import {
   getCurrentSession,
-  joinTripByInvite,
-  pushActiveTrip,
+  joinCityByInvite,
+  pushActiveCity,
   sendLoginLink,
   signOut,
   subscribeToAuthChanges,
-} from './src/services/tripSync';
-import { loadLocalTripState, saveLocalTripState } from './src/storage/localTripStore';
-import { EntryKind, LocalTripState, TripEntry, TripSpace } from './src/types';
+} from './src/services/citySync';
+import { loadLocalCityState, saveLocalCityState } from './src/storage/localCityStore';
+import { EntryKind, LocalCityState, CityEntry, CitySpace } from './src/types';
 
 const tabs: Array<{ key: EntryKind; label: string }> = [
   { key: 'idea', label: '灵感' },
@@ -41,7 +41,7 @@ const kindLabels: Record<EntryKind, string> = {
   memory: '回忆',
 };
 
-const syncLabels: Record<TripEntry['syncStatus'], string> = {
+const syncLabels: Record<CityEntry['syncStatus'], string> = {
   local: '本机',
   synced: '已同步',
   error: '待重试',
@@ -50,7 +50,7 @@ const syncLabels: Record<TripEntry['syncStatus'], string> = {
 export default function App() {
   const [screen, setScreen] = useState<'home' | 'detail'>('home');
   const [activeTab, setActiveTab] = useState<EntryKind>('idea');
-  const [tripState, setTripState] = useState<LocalTripState>(defaultLocalState);
+  const [cityState, setCityState] = useState<LocalCityState>(defaultLocalState);
   const [isHydrated, setIsHydrated] = useState(false);
   const [storageMessage, setStorageMessage] = useState('读取本地数据');
   const [session, setSession] = useState<Session | null>(null);
@@ -69,13 +69,13 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
-    loadLocalTripState()
+    loadLocalCityState()
       .then((storedState) => {
         if (!isMounted) {
           return;
         }
 
-        setTripState(storedState);
+        setCityState(storedState);
         setStorageMessage('本机已保存');
       })
       .catch(() => {
@@ -83,7 +83,7 @@ export default function App() {
           return;
         }
 
-        setTripState(defaultLocalState);
+        setCityState(defaultLocalState);
         setStorageMessage('本机数据已重置');
       })
       .finally(() => {
@@ -102,10 +102,10 @@ export default function App() {
       return;
     }
 
-    saveLocalTripState(tripState)
+    saveLocalCityState(cityState)
       .then(() => setStorageMessage('本机已保存'))
       .catch(() => setStorageMessage('本机保存失败'));
-  }, [isHydrated, tripState]);
+  }, [isHydrated, cityState]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -138,43 +138,43 @@ export default function App() {
     };
   }, []);
 
-  const activeTrip = useMemo(
+  const activeCity = useMemo(
     () =>
-      tripState.trips.find((trip) => trip.id === tripState.activeTripId) ??
-      tripState.trips[0] ??
-      defaultLocalState.trips[0],
-    [tripState.activeTripId, tripState.trips],
+      cityState.cities.find((city) => city.id === cityState.activeCityId) ??
+      cityState.cities[0] ??
+      defaultLocalState.cities[0],
+    [cityState.activeCityId, cityState.cities],
   );
 
-  const entriesForTrip = useMemo(
-    () => tripState.entries.filter((entry) => entry.tripId === activeTrip.id),
-    [activeTrip.id, tripState.entries],
+  const entriesForCity = useMemo(
+    () => cityState.entries.filter((entry) => entry.cityId === activeCity.id),
+    [activeCity.id, cityState.entries],
   );
 
   const activeEntries = useMemo(
-    () => entriesForTrip.filter((entry) => entry.kind === activeTab),
-    [activeTab, entriesForTrip],
+    () => entriesForCity.filter((entry) => entry.kind === activeTab),
+    [activeTab, entriesForCity],
   );
 
   const counts = useMemo(
-    () => getCountsForTrip(activeTrip.id, tripState.entries),
-    [activeTrip.id, tripState.entries],
+    () => getCountsForCity(activeCity.id, cityState.entries),
+    [activeCity.id, cityState.entries],
   );
 
   const cityCards = useMemo(
     () =>
-      tripState.trips.map((trip) => ({
-        trip,
-        counts: getCountsForTrip(trip.id, tripState.entries),
-        latestEntry: tripState.entries.find((entry) => entry.tripId === trip.id),
+      cityState.cities.map((city) => ({
+        city,
+        counts: getCountsForCity(city.id, cityState.entries),
+        latestEntry: cityState.entries.find((entry) => entry.cityId === city.id),
       })),
-    [tripState.entries, tripState.trips],
+    [cityState.entries, cityState.cities],
   );
 
-  function openTrip(tripId: string) {
-    setTripState((current) => ({
+  function openCity(cityId: string) {
+    setCityState((current) => ({
       ...current,
-      activeTripId: tripId,
+      activeCityId: cityId,
     }));
     setActiveTab('idea');
     setScreen('detail');
@@ -194,11 +194,11 @@ export default function App() {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '');
     const fallbackSlug = Math.random().toString(36).slice(2, 8);
-    const tripId = `city-${slug || fallbackSlug}-${Date.now()}`;
+    const cityId = `city-${slug || fallbackSlug}-${Date.now()}`;
     const codeStem = slug ? slug.replace(/-/g, '').slice(0, 6).toUpperCase() : 'CITY';
     const inviteCode = `${codeStem}${Math.floor(Math.random() * 90 + 10)}`;
-    const nextTrip: TripSpace = {
-      id: tripId,
+    const nextCity: CitySpace = {
+      id: cityId,
       title,
       destination: destination || '待整理',
       dateRange: '城市资料库',
@@ -208,10 +208,10 @@ export default function App() {
       updatedAt: now,
     };
 
-    setTripState((current) => ({
+    setCityState((current) => ({
       ...current,
-      activeTripId: nextTrip.id,
-      trips: [nextTrip, ...current.trips],
+      activeCityId: nextCity.id,
+      cities: [nextCity, ...current.cities],
     }));
     setCityName('');
     setCityFocus('');
@@ -230,12 +230,12 @@ export default function App() {
     const now = new Date().toISOString();
     const randomSuffix = Math.random().toString(36).slice(2, 8);
 
-    setTripState((current) => ({
+    setCityState((current) => ({
       ...current,
       entries: [
         {
           id: `${activeTab}-${Date.now()}-${randomSuffix}`,
-          tripId: activeTrip.id,
+          cityId: activeCity.id,
           kind: activeTab,
           title,
           note,
@@ -288,7 +288,7 @@ export default function App() {
     }
   }
 
-  async function handleSyncTrip() {
+  async function handleSyncCity() {
     if (!session) {
       setRemoteMessage('请先登录');
       return;
@@ -298,14 +298,14 @@ export default function App() {
     setRemoteMessage('正在同步城市空间');
 
     try {
-      const syncedState = await pushActiveTrip(tripState, session);
-      setTripState(syncedState);
+      const syncedState = await pushActiveCity(cityState, session);
+      setCityState(syncedState);
       setRemoteMessage('当前城市已同步');
     } catch (error) {
-      setTripState((current) => ({
+      setCityState((current) => ({
         ...current,
         entries: current.entries.map((entry) =>
-          entry.tripId === activeTrip.id && entry.syncStatus === 'local'
+          entry.cityId === activeCity.id && entry.syncStatus === 'local'
             ? { ...entry, syncStatus: 'error' }
             : entry,
         ),
@@ -333,17 +333,17 @@ export default function App() {
     setRemoteMessage('正在加入城市');
 
     try {
-      const remoteTrip = await joinTripByInvite(code);
-      setTripState((current) => ({
+      const remoteCity = await joinCityByInvite(code);
+      setCityState((current) => ({
         version: 2,
-        activeTripId: remoteTrip.trip.id,
-        trips: [
-          remoteTrip.trip,
-          ...current.trips.filter((trip) => trip.id !== remoteTrip.trip.id),
+        activeCityId: remoteCity.city.id,
+        cities: [
+          remoteCity.city,
+          ...current.cities.filter((city) => city.id !== remoteCity.city.id),
         ],
         entries: [
-          ...remoteTrip.entries,
-          ...current.entries.filter((entry) => entry.tripId !== remoteTrip.trip.id),
+          ...remoteCity.entries,
+          ...current.entries.filter((entry) => entry.cityId !== remoteCity.city.id),
         ],
       }));
       setInviteCode('');
@@ -379,7 +379,7 @@ export default function App() {
               <Text style={styles.title}>城市旅行库</Text>
             </View>
             <View style={styles.shareBadge}>
-              <Text style={styles.shareBadgeText}>{tripState.trips.length} 城</Text>
+              <Text style={styles.shareBadgeText}>{cityState.cities.length} 城</Text>
             </View>
           </View>
 
@@ -396,19 +396,19 @@ export default function App() {
           </View>
 
           <View style={styles.cityGrid}>
-            {cityCards.map(({ trip, counts: cityCounts, latestEntry }) => (
+            {cityCards.map(({ city, counts: cityCounts, latestEntry }) => (
               <Pressable
-                key={trip.id}
+                key={city.id}
                 accessibilityRole="button"
-                onPress={() => openTrip(trip.id)}
+                onPress={() => openCity(city.id)}
                 style={({ pressed }) => [styles.cityCard, pressed && styles.cityCardPressed]}
               >
                 <View style={styles.cityCardHeader}>
                   <View style={styles.cityTitleBlock}>
-                    <Text style={styles.cityName}>{trip.title}</Text>
-                    <Text style={styles.cityDestination}>{trip.destination}</Text>
+                    <Text style={styles.cityName}>{city.title}</Text>
+                    <Text style={styles.cityDestination}>{city.destination}</Text>
                   </View>
-                  <Text style={styles.cityMembers}>{trip.members.length} 人</Text>
+                  <Text style={styles.cityMembers}>{city.members.length} 人</Text>
                 </View>
                 <View style={styles.cityStatsRow}>
                   <MiniStat label="灵感" value={cityCounts.idea} />
@@ -462,7 +462,7 @@ export default function App() {
         <View style={styles.header}>
           <View>
             <Text style={styles.kicker}>Tripmates</Text>
-            <Text style={styles.title}>{activeTrip.title}</Text>
+            <Text style={styles.title}>{activeCity.title}</Text>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -478,16 +478,16 @@ export default function App() {
           <Text style={styles.statusPill}>{remoteMessage}</Text>
         </View>
 
-        <View style={styles.tripPanel}>
-          <View style={styles.tripSummary}>
-            <Text style={styles.tripDate}>
-              {activeTrip.dateRange} · {activeTrip.destination}
+        <View style={styles.cityPanel}>
+          <View style={styles.citySummary}>
+            <Text style={styles.cityDate}>
+              {activeCity.dateRange} · {activeCity.destination}
             </Text>
-            <Text style={styles.tripHeadline}>把这座城市想去的地方、确认过的信息和路上的瞬间放在一起。</Text>
+            <Text style={styles.cityHeadline}>把这座城市想去的地方、确认过的信息和路上的瞬间放在一起。</Text>
           </View>
           <View style={styles.inviteStrip}>
             <Text style={styles.inviteLabel}>邀请码</Text>
-            <Text style={styles.inviteCode}>{activeTrip.inviteCode}</Text>
+            <Text style={styles.inviteCode}>{activeCity.inviteCode}</Text>
           </View>
           <View style={styles.statsRow}>
             <Stat label="灵感" value={counts.idea} tone="mint" />
@@ -527,7 +527,7 @@ export default function App() {
             <Pressable
               accessibilityRole="button"
               disabled={!session || isRemoteBusy}
-              onPress={handleSyncTrip}
+              onPress={handleSyncCity}
               style={({ pressed }) => [
                 styles.secondaryButton,
                 pressed && styles.secondaryButtonPressed,
@@ -706,11 +706,11 @@ function MiniStat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function getCountsForTrip(tripId: string, entries: TripEntry[]) {
+function getCountsForCity(cityId: string, entries: CityEntry[]) {
   return tabs.reduce(
     (memo, tab) => ({
       ...memo,
-      [tab.key]: entries.filter((entry) => entry.tripId === tripId && entry.kind === tab.key)
+      [tab.key]: entries.filter((entry) => entry.cityId === cityId && entry.kind === tab.key)
         .length,
     }),
     {} as Record<EntryKind, number>,
@@ -891,22 +891,22 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: 12,
   },
-  tripPanel: {
+  cityPanel: {
     backgroundColor: '#ffffff',
     borderColor: '#dfe7f1',
     borderRadius: 8,
     borderWidth: 1,
     padding: 16,
   },
-  tripSummary: {
+  citySummary: {
     marginBottom: 14,
   },
-  tripDate: {
+  cityDate: {
     color: '#647187',
     fontSize: 13,
     fontWeight: '700',
   },
-  tripHeadline: {
+  cityHeadline: {
     color: '#1f2d3f',
     fontSize: 18,
     fontWeight: '800',

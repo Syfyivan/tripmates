@@ -1,9 +1,9 @@
 import { Session } from '@supabase/supabase-js';
 
-import { LocalTripState, TripEntry, TripSpace } from '../types';
+import { LocalCityState, CityEntry, CitySpace } from '../types';
 import { supabase } from './supabaseClient';
 
-type RemoteTripRow = {
+type RemoteCityRow = {
   id: string;
   title: string;
   destination: string;
@@ -16,8 +16,8 @@ type RemoteTripRow = {
 
 type RemoteEntryRow = {
   id: string;
-  trip_id: string;
-  kind: TripEntry['kind'];
+  city_id: string;
+  kind: CityEntry['kind'];
   title: string;
   note: string;
   tag: string;
@@ -80,35 +80,35 @@ export async function signOut() {
   }
 }
 
-export async function pushActiveTrip(state: LocalTripState, session: Session) {
+export async function pushActiveCity(state: LocalCityState, session: Session) {
   const client = requireSupabase();
-  const activeTrip = state.trips.find((trip) => trip.id === state.activeTripId);
+  const activeCity = state.cities.find((city) => city.id === state.activeCityId);
 
-  if (!activeTrip) {
+  if (!activeCity) {
     throw new Error('没有找到当前城市空间。');
   }
 
   const now = new Date().toISOString();
-  const { error: tripError } = await client.from('trips').upsert({
-    id: activeTrip.id,
-    title: activeTrip.title,
-    destination: activeTrip.destination,
-    date_range: activeTrip.dateRange,
-    invite_code: activeTrip.inviteCode,
-    member_names: activeTrip.members,
+  const { error: cityError } = await client.from('cities').upsert({
+    id: activeCity.id,
+    title: activeCity.title,
+    destination: activeCity.destination,
+    date_range: activeCity.dateRange,
+    invite_code: activeCity.inviteCode,
+    member_names: activeCity.members,
     owner_id: session.user.id,
     updated_at: now,
   });
 
-  if (tripError) {
-    throw tripError;
+  if (cityError) {
+    throw cityError;
   }
 
-  const entriesForTrip = state.entries.filter((entry) => entry.tripId === activeTrip.id);
-  const { error: entryError } = await client.from('trip_entries').upsert(
-    entriesForTrip.map((entry) => ({
+  const entriesForCity = state.entries.filter((entry) => entry.cityId === activeCity.id);
+  const { error: entryError } = await client.from('city_entries').upsert(
+    entriesForCity.map((entry) => ({
       id: entry.remoteId ?? entry.id,
-      trip_id: activeTrip.id,
+      city_id: activeCity.id,
       kind: entry.kind,
       title: entry.title,
       note: entry.note,
@@ -127,21 +127,21 @@ export async function pushActiveTrip(state: LocalTripState, session: Session) {
 
   return {
     ...state,
-    trips: state.trips.map((trip) =>
-      trip.id === activeTrip.id ? { ...trip, remoteId: activeTrip.id, updatedAt: now } : trip,
+    cities: state.cities.map((city) =>
+      city.id === activeCity.id ? { ...city, remoteId: activeCity.id, updatedAt: now } : city,
     ),
     entries: state.entries.map((entry) =>
-      entry.tripId === activeTrip.id
+      entry.cityId === activeCity.id
         ? { ...entry, remoteId: entry.remoteId ?? entry.id, syncStatus: 'synced' as const }
         : entry,
     ),
   };
 }
 
-export async function joinTripByInvite(inviteCode: string) {
+export async function joinCityByInvite(inviteCode: string) {
   const client = requireSupabase();
   const code = inviteCode.trim().toUpperCase();
-  const { data: joinedTripId, error: joinError } = await client.rpc('join_trip_by_invite', {
+  const { data: joinedCityId, error: joinError } = await client.rpc('join_city_by_invite', {
     invite_code_input: code,
   });
 
@@ -149,29 +149,29 @@ export async function joinTripByInvite(inviteCode: string) {
     throw joinError;
   }
 
-  if (typeof joinedTripId !== 'string') {
+  if (typeof joinedCityId !== 'string') {
     throw new Error('邀请码没有返回有效的城市空间。');
   }
 
-  return fetchRemoteTrip(joinedTripId);
+  return fetchRemoteCity(joinedCityId);
 }
 
-async function fetchRemoteTrip(tripId: string) {
+async function fetchRemoteCity(cityId: string) {
   const client = requireSupabase();
-  const { data: trip, error: tripError } = await client
-    .from('trips')
+  const { data: city, error: cityError } = await client
+    .from('cities')
     .select('id,title,destination,date_range,invite_code,member_names,created_at,updated_at')
-    .eq('id', tripId)
-    .single<RemoteTripRow>();
+    .eq('id', cityId)
+    .single<RemoteCityRow>();
 
-  if (tripError) {
-    throw tripError;
+  if (cityError) {
+    throw cityError;
   }
 
   const { data: entries, error: entryError } = await client
-    .from('trip_entries')
-    .select('id,trip_id,kind,title,note,tag,author_name,meta,created_at,updated_at')
-    .eq('trip_id', tripId)
+    .from('city_entries')
+    .select('id,city_id,kind,title,note,tag,author_name,meta,created_at,updated_at')
+    .eq('city_id', cityId)
     .order('created_at', { ascending: false })
     .returns<RemoteEntryRow[]>();
 
@@ -180,12 +180,12 @@ async function fetchRemoteTrip(tripId: string) {
   }
 
   return {
-    trip: mapRemoteTrip(trip),
+    city: mapRemoteCity(city),
     entries: (entries ?? []).map(mapRemoteEntry),
   };
 }
 
-function mapRemoteTrip(row: RemoteTripRow): TripSpace {
+function mapRemoteCity(row: RemoteCityRow): CitySpace {
   return {
     id: row.id,
     remoteId: row.id,
@@ -199,11 +199,11 @@ function mapRemoteTrip(row: RemoteTripRow): TripSpace {
   };
 }
 
-function mapRemoteEntry(row: RemoteEntryRow): TripEntry {
+function mapRemoteEntry(row: RemoteEntryRow): CityEntry {
   return {
     id: row.id,
     remoteId: row.id,
-    tripId: row.trip_id,
+    cityId: row.city_id,
     kind: row.kind,
     title: row.title,
     note: row.note,

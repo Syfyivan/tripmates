@@ -38,11 +38,13 @@ npm run typecheck
 
 ## Supabase Setup
 
-1. Create a Supabase project.
-2. Open the Supabase SQL editor and run `supabase/schema.sql`.
-3. Copy `.env.example` to `.env.local`.
-4. Fill in `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
-5. Restart Expo so the public environment variables are bundled.
+1. Create a Supabase project on the Free plan.
+2. Use a clear project name such as `tripmates`.
+3. Pick the region closest to the people who will use the app most often.
+4. Open the Supabase SQL editor and run `supabase/schema.sql`.
+5. Copy `.env.example` to `.env.local`.
+6. Fill in `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+7. Restart Expo so the public environment variables are bundled.
 
 Without these environment variables, Tripmates stays in local-only mode and still saves city cards and entries on the device.
 
