@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultLocalState } from '../data/seed';
 import { LocalCityState } from '../types';
 
-const LOCAL_STATE_KEY = 'tripmates:v2:city-library-state';
+const LOCAL_STATE_KEY = 'tripmates:v3:city-library-state';
 
 export async function loadLocalCityState(): Promise<LocalCityState> {
   const storedValue = await AsyncStorage.getItem(LOCAL_STATE_KEY);
@@ -15,7 +15,7 @@ export async function loadLocalCityState(): Promise<LocalCityState> {
   const parsed = JSON.parse(storedValue) as Partial<LocalCityState>;
 
   if (
-    parsed.version !== 2 ||
+    parsed.version !== 3 ||
     !parsed.activeCityId ||
     !Array.isArray(parsed.cities) ||
     !Array.isArray(parsed.entries)
@@ -24,7 +24,7 @@ export async function loadLocalCityState(): Promise<LocalCityState> {
   }
 
   return {
-    version: 2,
+    version: 3,
     activeCityId: parsed.activeCityId,
     cities: parsed.cities,
     entries: parsed.entries,

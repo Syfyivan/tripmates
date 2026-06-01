@@ -335,7 +335,7 @@ export default function App() {
     try {
       const remoteCity = await joinCityByInvite(code);
       setCityState((current) => ({
-        version: 2,
+        version: 3,
         activeCityId: remoteCity.city.id,
         cities: [
           remoteCity.city,

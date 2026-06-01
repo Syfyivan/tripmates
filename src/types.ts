@@ -28,7 +28,7 @@ export type CitySpace = {
 };
 
 export type LocalCityState = {
-  version: 2;
+  version: 3;
   activeCityId: string;
   cities: CitySpace[];
   entries: CityEntry[];
