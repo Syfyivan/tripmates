@@ -19,21 +19,21 @@ Ionic is a strong choice when the app should behave mostly like a web app and re
 ## Run Locally
 
 ```bash
-npm install
-npm run start
+npx yarn@1.22.22 install
+npx yarn@1.22.22 start
 ```
 
 Then scan the Expo QR code with Expo Go, or run:
 
 ```bash
-npm run android
-npm run ios
+npx yarn@1.22.22 android
+npx yarn@1.22.22 ios
 ```
 
 ## Verify
 
 ```bash
-npm run typecheck
+npx yarn@1.22.22 typecheck
 ```
 
 ## Supabase Setup
