@@ -6,6 +6,8 @@ export type CityEntry = {
   kind: EntryKind;
   title: string;
   note: string;
+  sourceUrl?: string;
+  aiSummary?: string;
   tag: string;
   author: string;
   meta: string;

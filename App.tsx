@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -60,6 +61,8 @@ export default function App() {
   const [isRemoteBusy, setIsRemoteBusy] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftNote, setDraftNote] = useState('');
+  const [draftUrl, setDraftUrl] = useState('');
+  const [draftAiSummary, setDraftAiSummary] = useState('');
   const [draftTag, setDraftTag] = useState(tags[0]);
   const [cityName, setCityName] = useState('');
   const [cityFocus, setCityFocus] = useState('');
@@ -161,6 +164,11 @@ export default function App() {
     [activeCity.id, cityState.entries],
   );
 
+  const normalizedDraftUrl = useMemo(
+    () => (activeTab === 'idea' ? normalizeSourceUrl(draftUrl) : ''),
+    [activeTab, draftUrl],
+  );
+
   const cityCards = useMemo(
     () =>
       cityState.cities.map((city) => ({
@@ -220,10 +228,16 @@ export default function App() {
   }
 
   function addEntry() {
-    const title = draftTitle.trim();
     const note = draftNote.trim();
+    const sourceUrl =
+      activeTab === 'idea' ? normalizedDraftUrl || normalizeSourceUrl(note) : '';
+    const title = getDraftTitle(draftTitle, note, sourceUrl, activeTab);
+    const finalNote =
+      activeTab === 'idea' && sourceUrl && !note
+        ? '先收进来，稍后整理地点、亮点和注意事项。'
+        : note;
 
-    if (!title || !note) {
+    if (!title || !finalNote) {
       return;
     }
 
@@ -238,7 +252,9 @@ export default function App() {
           cityId: activeCity.id,
           kind: activeTab,
           title,
-          note,
+          note: finalNote,
+          sourceUrl: sourceUrl || undefined,
+          aiSummary: draftAiSummary || undefined,
           tag: draftTag,
           author: session?.user.email ?? '我',
           meta: '刚刚添加',
@@ -251,6 +267,39 @@ export default function App() {
     }));
     setDraftTitle('');
     setDraftNote('');
+    setDraftUrl('');
+    setDraftAiSummary('');
+  }
+
+  function handlePrepareLinkSummary() {
+    if (!normalizedDraftUrl) {
+      setStorageMessage('先粘贴一个灵感链接');
+      return;
+    }
+
+    const sourceName = getLinkSourceName(normalizedDraftUrl);
+    const nextSummary = `已保存 ${sourceName} 链接。AI 总结接入后会提炼地点、亮点和注意事项；现在可以先补一句你为什么想去。`;
+
+    setDraftAiSummary(nextSummary);
+    setDraftNote((current) =>
+      current.trim()
+        ? current
+        : `先收进来：${sourceName} 里的旅行灵感，待补充地点、亮点和注意事项。`,
+    );
+    setStorageMessage('链接已准备整理');
+  }
+
+  function handleDraftUrlChange(value: string) {
+    setDraftUrl(value);
+    setDraftAiSummary('');
+  }
+
+  async function openEntryLink(sourceUrl: string) {
+    try {
+      await Linking.openURL(sourceUrl);
+    } catch {
+      setStorageMessage('链接打开失败');
+    }
   }
 
   async function handleSendLoginLink() {
@@ -395,6 +444,8 @@ export default function App() {
             </Text>
           </View>
 
+          <UsageGuide />
+
           <View style={styles.cityGrid}>
             {cityCards.map(({ city, counts: cityCounts, latestEntry }) => (
               <Pressable
@@ -495,6 +546,13 @@ export default function App() {
             <Stat label="行程" value={counts.plan} tone="amber" />
             <Stat label="回忆" value={counts.memory} tone="rose" />
           </View>
+        </View>
+
+        <View style={styles.guidePanel}>
+          <Text style={styles.sectionLabel}>怎么放内容</Text>
+          <Text style={styles.guideText}>
+            灵感先丢一句话或链接；攻略放确认过的信息；行程放日期安排；回忆放回来后想留下的瞬间。
+          </Text>
         </View>
 
         <View style={styles.remotePanel}>
@@ -598,14 +656,42 @@ export default function App() {
           <TextInput
             value={draftTitle}
             onChangeText={setDraftTitle}
-            placeholder="标题"
+            placeholder={activeTab === 'idea' ? '标题，可不填' : '标题'}
             placeholderTextColor="#8a94a6"
             style={styles.input}
           />
+          {activeTab === 'idea' ? (
+            <>
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={draftUrl}
+                onChangeText={handleDraftUrlChange}
+                placeholder="小红书 / 抖音 / 网页链接，可选"
+                placeholderTextColor="#8a94a6"
+                style={[styles.input, styles.linkInput]}
+              />
+              <View style={styles.linkActionRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={handlePrepareLinkSummary}
+                  style={({ pressed }) => [
+                    styles.secondaryButton,
+                    styles.summaryButton,
+                    pressed && styles.secondaryButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.secondaryButtonText}>整理链接</Text>
+                </Pressable>
+                <Text style={styles.linkHint}>先保存原链接，后面可接 AI 生成摘要。</Text>
+              </View>
+              {draftAiSummary ? <Text style={styles.aiSummaryPreview}>{draftAiSummary}</Text> : null}
+            </>
+          ) : null}
           <TextInput
             value={draftNote}
             onChangeText={setDraftNote}
-            placeholder="记录一点细节"
+            placeholder={activeTab === 'idea' ? '自己写灵感，也可以只放上面的链接' : '记录一点细节'}
             placeholderTextColor="#8a94a6"
             multiline
             style={[styles.input, styles.noteInput]}
@@ -668,6 +754,24 @@ export default function App() {
               </View>
               <Text style={styles.entryTitle}>{entry.title}</Text>
               <Text style={styles.entryNote}>{entry.note}</Text>
+              {entry.sourceUrl ? (
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() => openEntryLink(entry.sourceUrl!)}
+                  style={({ pressed }) => [styles.sourceLink, pressed && styles.sourceLinkPressed]}
+                >
+                  <Text style={styles.sourceLinkLabel}>来源</Text>
+                  <Text style={styles.sourceLinkText} numberOfLines={1}>
+                    {getLinkSourceName(entry.sourceUrl)} · 打开链接
+                  </Text>
+                </Pressable>
+              ) : null}
+              {entry.aiSummary ? (
+                <View style={styles.aiSummaryBox}>
+                  <Text style={styles.aiSummaryLabel}>AI 摘要</Text>
+                  <Text style={styles.aiSummaryText}>{entry.aiSummary}</Text>
+                </View>
+              ) : null}
               <View style={styles.entryBottomRow}>
                 <Text style={styles.entryAuthor}>由 {entry.author} 添加</Text>
                 <Text style={styles.entryMeta}>{entry.meta}</Text>
@@ -706,6 +810,18 @@ function MiniStat({ label, value }: { label: string; value: number }) {
   );
 }
 
+function UsageGuide() {
+  return (
+    <View style={styles.guidePanel}>
+      <Text style={styles.sectionLabel}>使用说明</Text>
+      <Text style={styles.guideText}>1. 首页先建城市卡片，比如新疆、广西。</Text>
+      <Text style={styles.guideText}>2. 点进城市后，把内容分到灵感、攻略、行程、回忆。</Text>
+      <Text style={styles.guideText}>3. 灵感可以自己写，也可以先贴小红书、抖音或网页链接。</Text>
+      <Text style={styles.guideText}>4. 登录后可以同步当前城市，再用邀请码邀请朋友加入。</Text>
+    </View>
+  );
+}
+
 function getCountsForCity(cityId: string, entries: CityEntry[]) {
   return tabs.reduce(
     (memo, tab) => ({
@@ -715,6 +831,68 @@ function getCountsForCity(cityId: string, entries: CityEntry[]) {
     }),
     {} as Record<EntryKind, number>,
   );
+}
+
+function getDraftTitle(
+  rawTitle: string,
+  note: string,
+  sourceUrl: string,
+  activeTab: EntryKind,
+) {
+  const title = rawTitle.trim();
+
+  if (title) {
+    return title;
+  }
+
+  if (activeTab === 'idea' && sourceUrl) {
+    return `${getLinkSourceName(sourceUrl)} 灵感`;
+  }
+
+  if (activeTab === 'idea' && note) {
+    const firstLine = note.split('\n')[0].trim();
+    return firstLine.length > 18 ? `${firstLine.slice(0, 18)}...` : firstLine;
+  }
+
+  return '';
+}
+
+function normalizeSourceUrl(rawValue: string) {
+  const raw = rawValue.trim();
+
+  if (!raw) {
+    return '';
+  }
+
+  const match = raw.match(/https?:\/\/[^\s，。；、)）]+/i) ?? raw.match(/www\.[^\s，。；、)）]+/i);
+
+  if (!match) {
+    return '';
+  }
+
+  const withoutTrailingPunctuation = match[0].replace(/[，。；、,.!?！？)）]+$/g, '');
+
+  return withoutTrailingPunctuation.startsWith('www.')
+    ? `https://${withoutTrailingPunctuation}`
+    : withoutTrailingPunctuation;
+}
+
+function getLinkSourceName(sourceUrl: string) {
+  try {
+    const host = new URL(sourceUrl).hostname.replace(/^www\./, '');
+
+    if (host.includes('xiaohongshu')) {
+      return '小红书';
+    }
+
+    if (host.includes('douyin')) {
+      return '抖音';
+    }
+
+    return host;
+  } catch {
+    return '链接';
+  }
 }
 
 const styles = StyleSheet.create({
@@ -814,6 +992,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginTop: 8,
+  },
+  guidePanel: {
+    backgroundColor: '#ffffff',
+    borderColor: '#dfe7f1',
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 16,
+    padding: 16,
+  },
+  guideText: {
+    color: '#526071',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 21,
+    marginTop: 4,
   },
   cityGrid: {
     gap: 12,
@@ -1049,6 +1242,39 @@ const styles = StyleSheet.create({
     minHeight: 88,
     textAlignVertical: 'top',
   },
+  linkInput: {
+    marginTop: 10,
+  },
+  linkActionRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  summaryButton: {
+    flex: 0,
+    minWidth: 92,
+    paddingHorizontal: 12,
+  },
+  linkHint: {
+    color: '#7a8597',
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
+  aiSummaryPreview: {
+    backgroundColor: '#f7f3ea',
+    borderColor: '#eadfca',
+    borderRadius: 8,
+    borderWidth: 1,
+    color: '#6b582d',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 19,
+    marginTop: 10,
+    padding: 10,
+  },
   cityFocusInput: {
     marginTop: 10,
   },
@@ -1214,6 +1440,50 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginTop: 8,
+  },
+  sourceLink: {
+    alignItems: 'center',
+    backgroundColor: '#eef4fb',
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  sourceLinkPressed: {
+    backgroundColor: '#e2ebf7',
+  },
+  sourceLinkLabel: {
+    color: '#4d6684',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  sourceLinkText: {
+    color: '#152033',
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  aiSummaryBox: {
+    backgroundColor: '#f7f3ea',
+    borderColor: '#eadfca',
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+    padding: 10,
+  },
+  aiSummaryLabel: {
+    color: '#6b582d',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  aiSummaryText: {
+    color: '#6b582d',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 19,
+    marginTop: 4,
   },
   entryBottomRow: {
     alignItems: 'center',

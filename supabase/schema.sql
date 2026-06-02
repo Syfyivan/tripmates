@@ -32,6 +32,8 @@ create table if not exists public.city_entries (
   kind text not null check (kind in ('idea', 'guide', 'plan', 'memory')),
   title text not null,
   note text not null,
+  source_url text,
+  ai_summary text,
   tag text not null,
   author_name text not null,
   author_user_id uuid references auth.users(id) on delete set null,

@@ -20,6 +20,8 @@ type RemoteEntryRow = {
   kind: CityEntry['kind'];
   title: string;
   note: string;
+  source_url?: string | null;
+  ai_summary?: string | null;
   tag: string;
   author_name: string;
   meta: string;
@@ -105,24 +107,30 @@ export async function pushActiveCity(state: LocalCityState, session: Session) {
   }
 
   const entriesForCity = state.entries.filter((entry) => entry.cityId === activeCity.id);
-  const { error: entryError } = await client.from('city_entries').upsert(
-    entriesForCity.map((entry) => ({
-      id: entry.remoteId ?? entry.id,
-      city_id: activeCity.id,
-      kind: entry.kind,
-      title: entry.title,
-      note: entry.note,
-      tag: entry.tag,
-      author_name: entry.author,
-      author_user_id: session.user.id,
-      meta: entry.meta,
-      created_at: entry.createdAt,
-      updated_at: entry.updatedAt,
-    })),
-  );
+  const { error: entryError } = await client
+    .from('city_entries')
+    .upsert(
+      entriesForCity.map((entry) =>
+        mapLocalEntryToRemotePayload(entry, activeCity.id, session.user.id, true),
+      ),
+    );
 
   if (entryError) {
-    throw entryError;
+    if (!isSourceColumnError(entryError)) {
+      throw entryError;
+    }
+
+    const { error: fallbackError } = await client
+      .from('city_entries')
+      .upsert(
+        entriesForCity.map((entry) =>
+          mapLocalEntryToRemotePayload(entry, activeCity.id, session.user.id, false),
+        ),
+      );
+
+    if (fallbackError) {
+      throw fallbackError;
+    }
   }
 
   return {
@@ -168,21 +176,33 @@ async function fetchRemoteCity(cityId: string) {
     throw cityError;
   }
 
-  const { data: entries, error: entryError } = await client
+  const entries = await fetchRemoteEntries(cityId, true);
+
+  return {
+    city: mapRemoteCity(city),
+    entries,
+  };
+}
+
+async function fetchRemoteEntries(cityId: string, includeSourceFields: boolean): Promise<CityEntry[]> {
+  const client = requireSupabase();
+  const sourceColumns = includeSourceFields ? ',source_url,ai_summary' : '';
+  const { data, error } = await client
     .from('city_entries')
-    .select('id,city_id,kind,title,note,tag,author_name,meta,created_at,updated_at')
+    .select(`id,city_id,kind,title,note${sourceColumns},tag,author_name,meta,created_at,updated_at`)
     .eq('city_id', cityId)
     .order('created_at', { ascending: false })
     .returns<RemoteEntryRow[]>();
 
-  if (entryError) {
-    throw entryError;
+  if (error) {
+    if (includeSourceFields && isSourceColumnError(error)) {
+      return fetchRemoteEntries(cityId, false);
+    }
+
+    throw error;
   }
 
-  return {
-    city: mapRemoteCity(city),
-    entries: (entries ?? []).map(mapRemoteEntry),
-  };
+  return (data ?? []).map(mapRemoteEntry);
 }
 
 function mapRemoteCity(row: RemoteCityRow): CitySpace {
@@ -207,6 +227,8 @@ function mapRemoteEntry(row: RemoteEntryRow): CityEntry {
     kind: row.kind,
     title: row.title,
     note: row.note,
+    sourceUrl: row.source_url ?? undefined,
+    aiSummary: row.ai_summary ?? undefined,
     tag: row.tag,
     author: row.author_name,
     meta: row.meta,
@@ -214,4 +236,41 @@ function mapRemoteEntry(row: RemoteEntryRow): CityEntry {
     updatedAt: row.updated_at,
     syncStatus: 'synced',
   };
+}
+
+function mapLocalEntryToRemotePayload(
+  entry: CityEntry,
+  cityId: string,
+  userId: string,
+  includeSourceFields: boolean,
+) {
+  const payload = {
+    id: entry.remoteId ?? entry.id,
+    city_id: cityId,
+    kind: entry.kind,
+    title: entry.title,
+    note: entry.note,
+    tag: entry.tag,
+    author_name: entry.author,
+    author_user_id: userId,
+    meta: entry.meta,
+    created_at: entry.createdAt,
+    updated_at: entry.updatedAt,
+  };
+
+  if (!includeSourceFields) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    source_url: entry.sourceUrl ?? null,
+    ai_summary: entry.aiSummary ?? null,
+  };
+}
+
+function isSourceColumnError(error: { message?: string; details?: string; hint?: string }) {
+  const text = `${error.message ?? ''} ${error.details ?? ''} ${error.hint ?? ''}`.toLowerCase();
+
+  return text.includes('source_url') || text.includes('ai_summary') || text.includes('schema cache');
 }

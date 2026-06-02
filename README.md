@@ -7,6 +7,8 @@ Tripmates is a lightweight Expo app for a small group of friends to build a priv
 - One Expo / React Native codebase for iOS and Android.
 - City-card home screen with a detail page for each city.
 - Four travel boards: ideas, guides, itinerary, and memories.
+- A short in-app usage guide for the city-first workflow.
+- Inspiration entries can store a note, a source link, and a prepared AI-summary placeholder.
 - Seed city cards for Xinjiang and Guangxi.
 - Local persistent card creation with AsyncStorage.
 - Optional Supabase login, city sync, and invite-code join flow.
@@ -50,6 +52,14 @@ npx yarn@1.22.22 typecheck
 
 Without these environment variables, Tripmates stays in local-only mode and still saves city cards and entries on the device.
 
+If your Supabase project was created before source links were added, run this SQL once in the dashboard SQL editor before syncing link entries:
+
+```sql
+alter table public.city_entries
+add column if not exists source_url text,
+add column if not exists ai_summary text;
+```
+
 ## Distribution Path
 
 Android can start with a signed APK through EAS Build. iOS should use TestFlight for friends during beta, or an unlisted App Store release once the app is ready for long-term use.
@@ -89,5 +99,5 @@ When the build finishes, EAS prints a build page and APK download link. Send tha
 1. Smoke test Supabase auth on a physical iOS and Android device.
 2. Replace manual sync with realtime updates and conflict handling.
 3. Add generated invite links that open a specific city in the app.
-4. Add maps, link previews, and photo memories.
-5. Run the first EAS Android preview build and install the APK on a real phone.
+4. Add a backend AI summarizer for Xiaohongshu, Douyin, and normal web links.
+5. Add maps, link previews, and photo memories.
