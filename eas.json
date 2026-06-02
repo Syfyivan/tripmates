@@ -1,6 +1,13 @@
 {
+  "cli": {
+    "appVersionSource": "local"
+  },
   "build": {
+    "base": {
+      "node": "20.19.5"
+    },
     "preview": {
+      "extends": "base",
       "distribution": "internal",
       "environment": "preview",
       "android": {
@@ -8,6 +15,7 @@
       }
     },
     "production": {
+      "extends": "base",
       "environment": "production",
       "android": {
         "buildType": "app-bundle"
