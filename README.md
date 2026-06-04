@@ -8,7 +8,8 @@ Tripmates is a lightweight Expo app for a small group of friends to build a priv
 - City-card home screen with a detail page for each city.
 - Four travel boards: ideas, guides, itinerary, and memories.
 - A short in-app usage guide for the city-first workflow.
-- Inspiration entries can store a note, a source link, and a prepared AI-summary placeholder.
+- Inspiration entries can store a note, a Xiaohongshu/Douyin/web source link, and an editable summary draft.
+- Guide entries can be generated from the current city's inspiration board as a day-by-day draft.
 - Seed city cards for Xinjiang and Guangxi.
 - Local persistent card creation with AsyncStorage.
 - Optional Supabase login, city sync, and invite-code join flow.
@@ -107,12 +108,22 @@ npx eas-cli@latest update --channel preview --message "Short update note" --envi
 
 Users must first install a build created after EAS Update was configured. Updates that change native code or native configuration still require a new APK build, for example installing a new native module, changing permissions, changing app icons or splash screens, upgrading Expo SDK, or changing the native runtime.
 
+## AI Generation Path
+
+The current app can create local, editable drafts from pasted inspiration links and existing notes. It does not yet fetch or understand Xiaohongshu/Douyin pages on its own. Real AI summarization should run server-side, for example:
+
+```text
+App -> Supabase Edge Function -> AI model API -> saved ai_summary / guide draft
+```
+
+Keeping model calls on the server avoids putting private API keys into the mobile app and gives one place to add link fetching, rate limits, and better prompts.
+
 ## Next Milestones
 
 1. Smoke test Supabase auth on a physical iOS and Android device.
 2. Install the first OTA-enabled Android preview APK on a real phone.
-3. Publish and verify the first `preview` channel OTA update.
-4. Replace manual sync with realtime updates and conflict handling.
-5. Add generated invite links that open a specific city in the app.
-6. Add a backend AI summarizer for Xiaohongshu, Douyin, and normal web links.
+3. Replace local draft generation with a Supabase Edge Function AI summarizer.
+4. Publish and verify each small capability through the `preview` channel OTA flow.
+5. Replace manual sync with realtime updates and conflict handling.
+6. Add generated invite links that open a specific city in the app.
 7. Add maps, link previews, and photo memories.

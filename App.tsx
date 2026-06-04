@@ -188,6 +188,11 @@ export default function App() {
     [activeTab, entriesForCity],
   );
 
+  const ideaEntries = useMemo(
+    () => entriesForCity.filter((entry) => entry.kind === 'idea'),
+    [entriesForCity],
+  );
+
   const counts = useMemo(
     () => getCountsForCity(activeCity.id, cityState.entries),
     [activeCity.id, cityState.entries],
@@ -301,26 +306,90 @@ export default function App() {
   }
 
   function handlePrepareLinkSummary() {
-    if (!normalizedDraftUrl) {
+    const sourceUrl = normalizedDraftUrl || normalizeSourceUrl(draftNote);
+
+    if (!sourceUrl) {
       setStorageMessage('先粘贴一个灵感链接');
       return;
     }
 
-    const sourceName = getLinkSourceName(normalizedDraftUrl);
-    const nextSummary = `已保存 ${sourceName} 链接。AI 总结接入后会提炼地点、亮点和注意事项；现在可以先补一句你为什么想去。`;
+    const sourceName = getLinkSourceName(sourceUrl);
+    const nextSummary = buildIdeaSummaryDraft({
+      city: activeCity,
+      note: draftNote,
+      rawSourceText: draftUrl,
+      sourceUrl,
+      tag: draftTag,
+      title: draftTitle,
+    });
 
+    setDraftUrl(sourceUrl);
     setDraftAiSummary(nextSummary);
     setDraftNote((current) =>
       current.trim()
         ? current
-        : `先收进来：${sourceName} 里的旅行灵感，待补充地点、亮点和注意事项。`,
+        : `先收进来：${sourceName} 里的旅行灵感，待核对地点、时间、交通和适合放进哪一天。`,
     );
-    setStorageMessage('链接已准备整理');
+    setStorageMessage('链接摘要已生成');
   }
 
   function handleDraftUrlChange(value: string) {
     setDraftUrl(value);
+
+    const sourceUrl = normalizeSourceUrl(value);
+
+    if (!sourceUrl) {
+      setDraftAiSummary('');
+      return;
+    }
+
+    setDraftAiSummary(
+      buildIdeaSummaryDraft({
+        city: activeCity,
+        note: draftNote,
+        rawSourceText: value,
+        sourceUrl,
+        tag: draftTag,
+        title: draftTitle,
+      }),
+    );
+  }
+
+  function handleGenerateGuideFromIdeas() {
+    if (ideaEntries.length === 0) {
+      setStorageMessage('先在灵感里放一些想去的地方');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const randomSuffix = Math.random().toString(36).slice(2, 8);
+    const guideNote = buildGuideDraftFromIdeas(activeCity, ideaEntries);
+
+    setCityState((current) => ({
+      ...current,
+      entries: [
+        {
+          id: `guide-${Date.now()}-${randomSuffix}`,
+          cityId: activeCity.id,
+          kind: 'guide',
+          title: `${activeCity.title} 每日攻略草稿`,
+          note: guideNote,
+          tag: '景点',
+          author: session?.user.email ?? '我',
+          meta: `由 ${ideaEntries.length} 条灵感生成`,
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: 'local',
+        },
+        ...current.entries,
+      ],
+    }));
+    setActiveTab('guide');
+    setDraftTitle('');
+    setDraftNote('');
+    setDraftUrl('');
     setDraftAiSummary('');
+    setStorageMessage('攻略草稿已生成');
   }
 
   async function openEntryLink(sourceUrl: string) {
@@ -649,7 +718,7 @@ export default function App() {
         <View style={styles.guidePanel}>
           <Text style={styles.sectionLabel}>怎么放内容</Text>
           <Text style={styles.guideText}>
-            灵感先丢一句话或链接；攻略放确认过的信息；行程放日期安排；回忆放回来后想留下的瞬间。
+            灵感先丢一句话或小红书、抖音链接；攻略可以从灵感生成草稿；行程放日期安排；回忆放回来后想留下的瞬间。
           </Text>
         </View>
 
@@ -749,23 +818,34 @@ export default function App() {
           })}
         </View>
 
+        {activeTab === 'guide' ? (
+          <GuideGeneratorPanel
+            ideaCount={ideaEntries.length}
+            onGenerate={handleGenerateGuideFromIdeas}
+          />
+        ) : null}
+
         <View style={styles.composer}>
-          <Text style={styles.sectionLabel}>添加到{kindLabels[activeTab]}</Text>
+          <Text style={styles.sectionLabel}>{getComposerTitle(activeTab)}</Text>
           <TextInput
             value={draftTitle}
             onChangeText={setDraftTitle}
-            placeholder={activeTab === 'idea' ? '标题，可不填' : '标题'}
+            placeholder={activeTab === 'idea' ? '标题，可不填，比如 喀什咖啡店' : '标题'}
             placeholderTextColor="#8a94a6"
             style={styles.input}
           />
           {activeTab === 'idea' ? (
             <>
+              <View style={styles.inputLabelRow}>
+                <Text style={styles.inputLabel}>小红书 / 抖音链接</Text>
+                <Text style={styles.inputMeta}>可粘贴整段分享文本</Text>
+              </View>
               <TextInput
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={draftUrl}
                 onChangeText={handleDraftUrlChange}
-                placeholder="小红书 / 抖音 / 网页链接，可选"
+                placeholder="粘贴链接，比如 https://..."
                 placeholderTextColor="#8a94a6"
                 style={[styles.input, styles.linkInput]}
               />
@@ -779,9 +859,9 @@ export default function App() {
                     pressed && styles.secondaryButtonPressed,
                   ]}
                 >
-                  <Text style={styles.secondaryButtonText}>整理链接</Text>
+                  <Text style={styles.secondaryButtonText}>AI 总结链接</Text>
                 </Pressable>
-                <Text style={styles.linkHint}>先保存原链接，后面可接 AI 生成摘要。</Text>
+                <Text style={styles.linkHint}>生成可编辑摘要和待核对清单。</Text>
               </View>
               {draftAiSummary ? <Text style={styles.aiSummaryPreview}>{draftAiSummary}</Text> : null}
             </>
@@ -927,6 +1007,41 @@ function UpdatePanel({
   );
 }
 
+function GuideGeneratorPanel({
+  ideaCount,
+  onGenerate,
+}: {
+  ideaCount: number;
+  onGenerate: () => void;
+}) {
+  const hasIdeas = ideaCount > 0;
+
+  return (
+    <View style={styles.generatorPanel}>
+      <View style={styles.generatorCopy}>
+        <Text style={styles.sectionLabel}>攻略生成</Text>
+        <Text style={styles.generatorText}>
+          {hasIdeas
+            ? `已有 ${ideaCount} 条灵感，可以先排成每日攻略草稿。`
+            : '先在灵感里放链接或想法，再回来生成攻略草稿。'}
+        </Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        disabled={!hasIdeas}
+        onPress={onGenerate}
+        style={({ pressed }) => [
+          styles.generatorButton,
+          pressed && styles.primaryButtonPressed,
+          !hasIdeas && styles.buttonDisabled,
+        ]}
+      >
+        <Text style={styles.primaryButtonText}>一键生成攻略</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function Stat({
   label,
   value,
@@ -951,6 +1066,14 @@ function MiniStat({ label, value }: { label: string; value: number }) {
       <Text style={styles.miniStatLabel}>{label}</Text>
     </View>
   );
+}
+
+function getComposerTitle(activeTab: EntryKind) {
+  if (activeTab === 'idea') {
+    return '收集灵感';
+  }
+
+  return `添加到${kindLabels[activeTab]}`;
 }
 
 function UsageGuide() {
@@ -1056,6 +1179,91 @@ function getLinkSourceName(sourceUrl: string) {
   } catch {
     return '链接';
   }
+}
+
+function buildIdeaSummaryDraft({
+  city,
+  note,
+  rawSourceText,
+  sourceUrl,
+  tag,
+  title,
+}: {
+  city: CitySpace;
+  note: string;
+  rawSourceText: string;
+  sourceUrl: string;
+  tag: string;
+  title: string;
+}) {
+  const sourceName = getLinkSourceName(sourceUrl);
+  const cleanShareText = getUsefulShareText(rawSourceText, sourceUrl);
+  const signal = cleanShareText || title.trim() || note.trim() || `${city.title} ${tag}灵感`;
+
+  return [
+    `来源：${sourceName}`,
+    `可能主题：${clipText(signal, 56)}`,
+    `适合放进：${city.title} · ${tag}`,
+    '待核对：具体地址、开放时间、预约方式、交通耗时、费用。',
+  ].join('\n');
+}
+
+function buildGuideDraftFromIdeas(city: CitySpace, ideas: CityEntry[]) {
+  const selectedIdeas = [...ideas]
+    .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt))
+    .slice(0, 10);
+  const dayCount = Math.min(5, Math.max(2, Math.ceil(selectedIdeas.length / 2)));
+  const lines = [
+    `目标：把 ${city.title} 的 ${selectedIdeas.length} 条灵感先排成 ${dayCount} 天攻略草稿。`,
+    `范围：${city.destination}`,
+    '出发前核对：位置、开放时间、门票/预约、天气、交通耗时和闭店日。',
+    '',
+  ];
+
+  for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
+    const morningIdea = selectedIdeas[dayIndex * 2] ?? selectedIdeas[0];
+    const afternoonIdea = selectedIdeas[dayIndex * 2 + 1] ?? selectedIdeas[dayIndex] ?? selectedIdeas[0];
+    const eveningIdea = selectedIdeas[(dayIndex * 2 + 2) % selectedIdeas.length] ?? afternoonIdea;
+
+    lines.push(
+      `Day ${dayIndex + 1}：${clipText(morningIdea.title, 22)}`,
+      `上午：${summarizeIdeaForGuide(morningIdea)}`,
+      `下午：${summarizeIdeaForGuide(afternoonIdea)}`,
+      `晚上：围绕 ${clipText(eveningIdea.title, 18)} 安排吃饭、散步或休息。`,
+      '待查：把当天地点按地图顺路排序，再确认营业时间和交通方式。',
+      '',
+    );
+  }
+
+  lines.push('下一步：把确认后的地址、时间和预约信息补到攻略里，再把已定日期放进行程。');
+
+  return lines.join('\n');
+}
+
+function summarizeIdeaForGuide(entry: CityEntry) {
+  const source = entry.sourceUrl ? `（来源：${getLinkSourceName(entry.sourceUrl)}）` : '';
+  const summary = entry.aiSummary || entry.note;
+
+  return `${clipText(entry.title, 18)}${source}：${clipText(summary, 54)}`;
+}
+
+function getUsefulShareText(rawSourceText: string, sourceUrl: string) {
+  return rawSourceText
+    .replace(sourceUrl, '')
+    .replace(/https?:\/\/[^\s，。；、)）]+/gi, '')
+    .replace(/www\.[^\s，。；、)）]+/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function clipText(value: string, maxLength: number) {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength)}...`;
 }
 
 const styles = StyleSheet.create({
@@ -1427,6 +1635,34 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: '#152033',
   },
+  generatorPanel: {
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderColor: '#dfe7f1',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 14,
+    padding: 16,
+  },
+  generatorCopy: {
+    flex: 1,
+  },
+  generatorText: {
+    color: '#526071',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  generatorButton: {
+    alignItems: 'center',
+    backgroundColor: '#152033',
+    borderRadius: 8,
+    justifyContent: 'center',
+    minHeight: 46,
+    paddingHorizontal: 14,
+  },
   composer: {
     backgroundColor: '#ffffff',
     borderColor: '#dfe7f1',
@@ -1440,6 +1676,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     marginBottom: 10,
+  },
+  inputLabelRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  inputLabel: {
+    color: '#32445b',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  inputMeta: {
+    color: '#8792a3',
+    fontSize: 12,
+    fontWeight: '700',
   },
   input: {
     backgroundColor: '#f6f8fb',
