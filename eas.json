@@ -4,7 +4,8 @@
   },
   "build": {
     "base": {
-      "node": "20.19.5"
+      "node": "20.19.5",
+      "channel": "base"
     },
     "preview": {
       "extends": "base",
@@ -12,14 +13,16 @@
       "environment": "preview",
       "android": {
         "buildType": "apk"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "extends": "base",
       "environment": "production",
       "android": {
         "buildType": "app-bundle"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {

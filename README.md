@@ -12,6 +12,7 @@ Tripmates is a lightweight Expo app for a small group of friends to build a priv
 - Seed city cards for Xinjiang and Guangxi.
 - Local persistent card creation with AsyncStorage.
 - Optional Supabase login, city sync, and invite-code join flow.
+- EAS Update support with an in-app update prompt for compatible OTA changes.
 - Mobile-first UI that runs in Expo Go while the product shape is still changing.
 
 ## Why Not Ionic?
@@ -94,10 +95,24 @@ npx eas-cli@latest build --platform android --profile preview
 
 When the build finishes, EAS prints a build page and APK download link. Send that APK link to Android friends and they can install it directly. Android may ask them to allow installation from the browser or file manager.
 
+### OTA Updates
+
+This project is configured for EAS Update. The `preview` APK listens to the `preview` update channel, and the app shows an in-app update panel that can check, download, and restart into a compatible update.
+
+Publish a small JavaScript, styling, text, or asset update without rebuilding the APK:
+
+```bash
+npx eas-cli@latest update --channel preview --message "Short update note" --environment preview
+```
+
+Users must first install a build created after EAS Update was configured. Updates that change native code or native configuration still require a new APK build, for example installing a new native module, changing permissions, changing app icons or splash screens, upgrading Expo SDK, or changing the native runtime.
+
 ## Next Milestones
 
 1. Smoke test Supabase auth on a physical iOS and Android device.
-2. Replace manual sync with realtime updates and conflict handling.
-3. Add generated invite links that open a specific city in the app.
-4. Add a backend AI summarizer for Xiaohongshu, Douyin, and normal web links.
-5. Add maps, link previews, and photo memories.
+2. Install the first OTA-enabled Android preview APK on a real phone.
+3. Publish and verify the first `preview` channel OTA update.
+4. Replace manual sync with realtime updates and conflict handling.
+5. Add generated invite links that open a specific city in the app.
+6. Add a backend AI summarizer for Xiaohongshu, Douyin, and normal web links.
+7. Add maps, link previews, and photo memories.

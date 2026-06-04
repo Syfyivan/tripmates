@@ -29,6 +29,12 @@
         "projectId": "82c7fb4d-6244-43ea-81da-a1df08a6a80a"
       }
     },
-    "owner": "syfyivan"
+    "owner": "syfyivan",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/82c7fb4d-6244-43ea-81da-a1df08a6a80a"
+    }
   }
 }

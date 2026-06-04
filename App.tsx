@@ -1,7 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import * as Updates from 'expo-updates';
 import {
   ActivityIndicator,
+  AppState,
   Linking,
   Pressable,
   SafeAreaView,
@@ -48,6 +50,8 @@ const syncLabels: Record<CityEntry['syncStatus'], string> = {
   error: '待重试',
 };
 
+type UpdateStatus = 'idle' | 'unsupported' | 'checking' | 'downloading' | 'ready' | 'restarting' | 'error';
+
 export default function App() {
   const [screen, setScreen] = useState<'home' | 'detail'>('home');
   const [activeTab, setActiveTab] = useState<EntryKind>('idea');
@@ -68,6 +72,11 @@ export default function App() {
   const [cityFocus, setCityFocus] = useState('');
   const [email, setEmail] = useState('');
   const [inviteCode, setInviteCode] = useState('');
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(
+    isOtaUpdateRuntimeAvailable() ? 'idle' : 'unsupported',
+  );
+  const [updateMessage, setUpdateMessage] = useState(getInitialUpdateMessage());
+  const updateStatusRef = useRef(updateStatus);
 
   useEffect(() => {
     let isMounted = true;
@@ -140,6 +149,26 @@ export default function App() {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    updateStatusRef.current = updateStatus;
+  }, [updateStatus]);
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
+    checkForAppUpdate(true);
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        checkForAppUpdate(true);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [isHydrated]);
 
   const activeCity = useMemo(
     () =>
@@ -302,6 +331,61 @@ export default function App() {
     }
   }
 
+  async function checkForAppUpdate(isAutomatic = false) {
+    if (
+      isAutomatic &&
+      ['checking', 'downloading', 'ready', 'restarting'].includes(updateStatusRef.current)
+    ) {
+      return;
+    }
+
+    if (!isOtaUpdateRuntimeAvailable()) {
+      setUpdateStatus('unsupported');
+      setUpdateMessage(getInitialUpdateMessage());
+      return;
+    }
+
+    setUpdateStatus('checking');
+    setUpdateMessage(isAutomatic ? '正在检查有没有新版本' : '正在手动检查更新');
+
+    try {
+      const update = await Updates.checkForUpdateAsync();
+
+      if (!update.isAvailable) {
+        setUpdateStatus('idle');
+        setUpdateMessage('当前已经是最新版本');
+        return;
+      }
+
+      setUpdateStatus('downloading');
+      setUpdateMessage('发现新版本，正在下载');
+      await Updates.fetchUpdateAsync();
+      setUpdateStatus('ready');
+      setUpdateMessage('新版本已下载，点重启后生效');
+    } catch (error) {
+      setUpdateStatus('error');
+      setUpdateMessage(error instanceof Error ? error.message : '检查更新失败');
+    }
+  }
+
+  async function applyDownloadedUpdate() {
+    if (!isOtaUpdateRuntimeAvailable()) {
+      setUpdateStatus('unsupported');
+      setUpdateMessage(getInitialUpdateMessage());
+      return;
+    }
+
+    setUpdateStatus('restarting');
+    setUpdateMessage('正在重启应用');
+
+    try {
+      await Updates.reloadAsync();
+    } catch (error) {
+      setUpdateStatus('error');
+      setUpdateMessage(error instanceof Error ? error.message : '重启更新失败');
+    }
+  }
+
   async function handleSendLoginLink() {
     const normalizedEmail = email.trim();
 
@@ -437,6 +521,13 @@ export default function App() {
             <Text style={styles.statusPill}>{remoteMessage}</Text>
           </View>
 
+          <UpdatePanel
+            status={updateStatus}
+            message={updateMessage}
+            onCheck={() => checkForAppUpdate(false)}
+            onRestart={applyDownloadedUpdate}
+          />
+
           <View style={styles.homeIntro}>
             <Text style={styles.homeIntroTitle}>先选城市，再整理攻略。</Text>
             <Text style={styles.homeIntroText}>
@@ -528,6 +619,13 @@ export default function App() {
           <Text style={styles.statusPill}>{storageMessage}</Text>
           <Text style={styles.statusPill}>{remoteMessage}</Text>
         </View>
+
+        <UpdatePanel
+          status={updateStatus}
+          message={updateMessage}
+          onCheck={() => checkForAppUpdate(false)}
+          onRestart={applyDownloadedUpdate}
+        />
 
         <View style={styles.cityPanel}>
           <View style={styles.citySummary}>
@@ -784,6 +882,51 @@ export default function App() {
   );
 }
 
+function UpdatePanel({
+  status,
+  message,
+  onCheck,
+  onRestart,
+}: {
+  status: UpdateStatus;
+  message: string;
+  onCheck: () => void;
+  onRestart: () => void;
+}) {
+  const isBusy = status === 'checking' || status === 'downloading' || status === 'restarting';
+  const isReady = status === 'ready';
+  const isUnsupported = status === 'unsupported';
+  const buttonLabel = isReady ? '重启更新' : isBusy ? '处理中' : '检查更新';
+
+  return (
+    <View style={styles.updatePanel}>
+      <View style={styles.updateCopy}>
+        <View style={styles.updateHeaderRow}>
+          <Text style={styles.sectionLabel}>应用更新</Text>
+          {isBusy ? <ActivityIndicator color="#152033" /> : null}
+        </View>
+        <Text style={styles.updateMessage}>{message}</Text>
+        <Text style={styles.updateMeta}>{getUpdateRuntimeLabel()}</Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        disabled={isBusy || isUnsupported}
+        onPress={isReady ? onRestart : onCheck}
+        style={({ pressed }) => [
+          styles.updateButton,
+          isReady && styles.updateButtonReady,
+          pressed && styles.secondaryButtonPressed,
+          (isBusy || isUnsupported) && styles.buttonDisabled,
+        ]}
+      >
+        <Text style={[styles.updateButtonText, isReady && styles.updateButtonReadyText]}>
+          {buttonLabel}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function Stat({
   label,
   value,
@@ -831,6 +974,26 @@ function getCountsForCity(cityId: string, entries: CityEntry[]) {
     }),
     {} as Record<EntryKind, number>,
   );
+}
+
+function isOtaUpdateRuntimeAvailable() {
+  return Updates.isEnabled && Boolean(Updates.channel) && Boolean(Updates.runtimeVersion);
+}
+
+function getInitialUpdateMessage() {
+  if (!isOtaUpdateRuntimeAvailable()) {
+    return '当前是本地预览环境；安装新的 preview APK 后即可接收 OTA 更新提示。';
+  }
+
+  return '启动时会自动检查小更新';
+}
+
+function getUpdateRuntimeLabel() {
+  if (!isOtaUpdateRuntimeAvailable()) {
+    return 'OTA 未启用';
+  }
+
+  return `频道 ${Updates.channel} · runtime ${Updates.runtimeVersion}`;
 }
 
 function getDraftTitle(
@@ -973,6 +1136,58 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 10,
     paddingVertical: 6,
+  },
+  updatePanel: {
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderColor: '#dfe7f1',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 14,
+    padding: 14,
+  },
+  updateCopy: {
+    flex: 1,
+  },
+  updateHeaderRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  updateMessage: {
+    color: '#48576b',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  updateMeta: {
+    color: '#8792a3',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  updateButton: {
+    alignItems: 'center',
+    backgroundColor: '#e9eef6',
+    borderRadius: 8,
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 92,
+    paddingHorizontal: 12,
+  },
+  updateButtonReady: {
+    backgroundColor: '#0f766e',
+  },
+  updateButtonText: {
+    color: '#152033',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  updateButtonReadyText: {
+    color: '#ffffff',
   },
   homeIntro: {
     backgroundColor: '#ffffff',
