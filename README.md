@@ -10,6 +10,8 @@ Tripmates is a lightweight Expo app for a small group of friends to build a priv
 - A short in-app usage guide for the city-first workflow.
 - Inspiration entries can store a note, a Xiaohongshu/Douyin/web source link, and an editable summary draft.
 - Guide entries can be generated from the current city's inspiration board as a day-by-day draft.
+- Guide entries can store a Feishu/Lark document link as their source.
+- Itinerary entries can be generated from the current city's guide board and linked guide documents.
 - Seed city cards for Xinjiang and Guangxi.
 - Local persistent card creation with AsyncStorage.
 - Optional Supabase login, city sync, and invite-code join flow.
@@ -110,19 +112,19 @@ Users must first install a build created after EAS Update was configured. Update
 
 ## AI Generation Path
 
-The current app can create local, editable drafts from pasted inspiration links and existing notes. It does not yet fetch or understand Xiaohongshu/Douyin pages on its own. Real AI summarization should run server-side, for example:
+The current app can create local, editable drafts from pasted inspiration links, Feishu/Lark document links, and existing notes. It does not yet fetch or understand Xiaohongshu/Douyin pages or Feishu document bodies on its own. Real AI summarization should run server-side, for example:
 
 ```text
-App -> Supabase Edge Function -> AI model API -> saved ai_summary / guide draft
+App -> Supabase Edge Function -> link/doc fetcher -> AI model API -> saved ai_summary / guide draft / itinerary draft
 ```
 
-Keeping model calls on the server avoids putting private API keys into the mobile app and gives one place to add link fetching, rate limits, and better prompts.
+Keeping model calls and Feishu credentials on the server avoids putting private API keys into the mobile app and gives one place to add document fetching, link fetching, rate limits, and better prompts.
 
 ## Next Milestones
 
 1. Smoke test Supabase auth on a physical iOS and Android device.
 2. Install the first OTA-enabled Android preview APK on a real phone.
-3. Replace local draft generation with a Supabase Edge Function AI summarizer.
+3. Replace local draft generation with a Supabase Edge Function AI summarizer and Feishu document reader.
 4. Publish and verify each small capability through the `preview` channel OTA flow.
 5. Replace manual sync with realtime updates and conflict handling.
 6. Add generated invite links that open a specific city in the app.

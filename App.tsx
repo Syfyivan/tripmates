@@ -193,13 +193,18 @@ export default function App() {
     [entriesForCity],
   );
 
+  const guideEntries = useMemo(
+    () => entriesForCity.filter((entry) => entry.kind === 'guide'),
+    [entriesForCity],
+  );
+
   const counts = useMemo(
     () => getCountsForCity(activeCity.id, cityState.entries),
     [activeCity.id, cityState.entries],
   );
 
   const normalizedDraftUrl = useMemo(
-    () => (activeTab === 'idea' ? normalizeSourceUrl(draftUrl) : ''),
+    () => (activeTab === 'idea' || activeTab === 'guide' ? normalizeSourceUrl(draftUrl) : ''),
     [activeTab, draftUrl],
   );
 
@@ -264,12 +269,11 @@ export default function App() {
   function addEntry() {
     const note = draftNote.trim();
     const sourceUrl =
-      activeTab === 'idea' ? normalizedDraftUrl || normalizeSourceUrl(note) : '';
+      activeTab === 'idea' || activeTab === 'guide'
+        ? normalizedDraftUrl || normalizeSourceUrl(note)
+        : '';
     const title = getDraftTitle(draftTitle, note, sourceUrl, activeTab);
-    const finalNote =
-      activeTab === 'idea' && sourceUrl && !note
-        ? '先收进来，稍后整理地点、亮点和注意事项。'
-        : note;
+    const finalNote = getDraftNote(note, sourceUrl, activeTab);
 
     if (!title || !finalNote) {
       return;
@@ -343,16 +347,58 @@ export default function App() {
       return;
     }
 
-    setDraftAiSummary(
-      buildIdeaSummaryDraft({
-        city: activeCity,
-        note: draftNote,
-        rawSourceText: value,
-        sourceUrl,
-        tag: draftTag,
-        title: draftTitle,
-      }),
+    if (activeTab === 'idea') {
+      setDraftAiSummary(
+        buildIdeaSummaryDraft({
+          city: activeCity,
+          note: draftNote,
+          rawSourceText: value,
+          sourceUrl,
+          tag: draftTag,
+          title: draftTitle,
+        }),
+      );
+      return;
+    }
+
+    if (activeTab === 'guide') {
+      setDraftAiSummary(
+        buildGuideDocSummaryDraft({
+          city: activeCity,
+          note: draftNote,
+          rawSourceText: value,
+          sourceUrl,
+          title: draftTitle,
+        }),
+      );
+    }
+  }
+
+  function handlePrepareGuideDoc() {
+    const sourceUrl = normalizedDraftUrl || normalizeSourceUrl(draftNote);
+
+    if (!sourceUrl) {
+      setStorageMessage('先粘贴一个飞书文档链接');
+      return;
+    }
+
+    const sourceName = getLinkSourceName(sourceUrl);
+    const nextSummary = buildGuideDocSummaryDraft({
+      city: activeCity,
+      note: draftNote,
+      rawSourceText: draftUrl,
+      sourceUrl,
+      title: draftTitle,
+    });
+
+    setDraftUrl(sourceUrl);
+    setDraftAiSummary(nextSummary);
+    setDraftNote((current) =>
+      current.trim()
+        ? current
+        : `已关联 ${sourceName} 攻略文档。下一步需要从文档里核对日期、地点、交通、预约和预算。`,
     );
+    setStorageMessage('攻略文档已关联');
   }
 
   function handleGenerateGuideFromIdeas() {
@@ -390,6 +436,43 @@ export default function App() {
     setDraftUrl('');
     setDraftAiSummary('');
     setStorageMessage('攻略草稿已生成');
+  }
+
+  function handleGeneratePlanFromGuides() {
+    if (guideEntries.length === 0) {
+      setStorageMessage('先在攻略里添加飞书文档或攻略草稿');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const randomSuffix = Math.random().toString(36).slice(2, 8);
+    const planNote = buildPlanDraftFromGuides(activeCity, guideEntries, ideaEntries);
+
+    setCityState((current) => ({
+      ...current,
+      entries: [
+        {
+          id: `plan-${Date.now()}-${randomSuffix}`,
+          cityId: activeCity.id,
+          kind: 'plan',
+          title: `${activeCity.title} 行程草稿`,
+          note: planNote,
+          tag: '交通',
+          author: session?.user.email ?? '我',
+          meta: `由 ${guideEntries.length} 条攻略生成`,
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: 'local',
+        },
+        ...current.entries,
+      ],
+    }));
+    setActiveTab('plan');
+    setDraftTitle('');
+    setDraftNote('');
+    setDraftUrl('');
+    setDraftAiSummary('');
+    setStorageMessage('行程草稿已生成');
   }
 
   async function openEntryLink(sourceUrl: string) {
@@ -718,7 +801,7 @@ export default function App() {
         <View style={styles.guidePanel}>
           <Text style={styles.sectionLabel}>怎么放内容</Text>
           <Text style={styles.guideText}>
-            灵感先丢一句话或小红书、抖音链接；攻略可以从灵感生成草稿；行程放日期安排；回忆放回来后想留下的瞬间。
+            灵感先丢一句话或小红书、抖音链接；攻略可以关联飞书文档；行程可以按攻略生成草稿；回忆放回来后想留下的瞬间。
           </Text>
         </View>
 
@@ -825,43 +908,65 @@ export default function App() {
           />
         ) : null}
 
+        {activeTab === 'plan' ? (
+          <ItineraryGeneratorPanel
+            guideCount={guideEntries.length}
+            docCount={guideEntries.filter((entry) => entry.sourceUrl).length}
+            onGenerate={handleGeneratePlanFromGuides}
+          />
+        ) : null}
+
         <View style={styles.composer}>
           <Text style={styles.sectionLabel}>{getComposerTitle(activeTab)}</Text>
           <TextInput
             value={draftTitle}
             onChangeText={setDraftTitle}
-            placeholder={activeTab === 'idea' ? '标题，可不填，比如 喀什咖啡店' : '标题'}
+            placeholder={getTitlePlaceholder(activeTab)}
             placeholderTextColor="#8a94a6"
             style={styles.input}
           />
-          {activeTab === 'idea' ? (
+          {activeTab === 'idea' || activeTab === 'guide' ? (
             <>
               <View style={styles.inputLabelRow}>
-                <Text style={styles.inputLabel}>小红书 / 抖音链接</Text>
-                <Text style={styles.inputMeta}>可粘贴整段分享文本</Text>
+                <Text style={styles.inputLabel}>
+                  {activeTab === 'idea' ? '小红书 / 抖音链接' : '飞书文档链接'}
+                </Text>
+                <Text style={styles.inputMeta}>
+                  {activeTab === 'idea' ? '可粘贴整段分享文本' : '粘贴分享链接'}
+                </Text>
               </View>
               <TextInput
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={draftUrl}
                 onChangeText={handleDraftUrlChange}
-                placeholder="粘贴链接，比如 https://..."
+                placeholder={
+                  activeTab === 'idea'
+                    ? '粘贴链接，比如 https://...'
+                    : '粘贴飞书文档链接，比如 https://...'
+                }
                 placeholderTextColor="#8a94a6"
                 style={[styles.input, styles.linkInput]}
               />
               <View style={styles.linkActionRow}>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={handlePrepareLinkSummary}
+                  onPress={activeTab === 'idea' ? handlePrepareLinkSummary : handlePrepareGuideDoc}
                   style={({ pressed }) => [
                     styles.secondaryButton,
                     styles.summaryButton,
                     pressed && styles.secondaryButtonPressed,
                   ]}
                 >
-                  <Text style={styles.secondaryButtonText}>AI 总结链接</Text>
+                  <Text style={styles.secondaryButtonText}>
+                    {activeTab === 'idea' ? 'AI 总结链接' : '关联文档'}
+                  </Text>
                 </Pressable>
-                <Text style={styles.linkHint}>生成可编辑摘要和待核对清单。</Text>
+                <Text style={styles.linkHint}>
+                  {activeTab === 'idea'
+                    ? '生成可编辑摘要和待核对清单。'
+                    : '保存文档来源，供行程生成引用。'}
+                </Text>
               </View>
               {draftAiSummary ? <Text style={styles.aiSummaryPreview}>{draftAiSummary}</Text> : null}
             </>
@@ -869,7 +974,7 @@ export default function App() {
           <TextInput
             value={draftNote}
             onChangeText={setDraftNote}
-            placeholder={activeTab === 'idea' ? '自己写灵感，也可以只放上面的链接' : '记录一点细节'}
+            placeholder={getNotePlaceholder(activeTab)}
             placeholderTextColor="#8a94a6"
             multiline
             style={[styles.input, styles.noteInput]}
@@ -1042,6 +1147,43 @@ function GuideGeneratorPanel({
   );
 }
 
+function ItineraryGeneratorPanel({
+  guideCount,
+  docCount,
+  onGenerate,
+}: {
+  guideCount: number;
+  docCount: number;
+  onGenerate: () => void;
+}) {
+  const hasGuides = guideCount > 0;
+
+  return (
+    <View style={styles.generatorPanel}>
+      <View style={styles.generatorCopy}>
+        <Text style={styles.sectionLabel}>行程生成</Text>
+        <Text style={styles.generatorText}>
+          {hasGuides
+            ? `已有 ${guideCount} 条攻略，其中 ${docCount} 条关联了文档，可以生成行程草稿。`
+            : '先在攻略里上传飞书文档或添加攻略草稿，再生成行程。'}
+        </Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        disabled={!hasGuides}
+        onPress={onGenerate}
+        style={({ pressed }) => [
+          styles.generatorButton,
+          pressed && styles.primaryButtonPressed,
+          !hasGuides && styles.buttonDisabled,
+        ]}
+      >
+        <Text style={styles.primaryButtonText}>按攻略生成行程</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function Stat({
   label,
   value,
@@ -1073,7 +1215,47 @@ function getComposerTitle(activeTab: EntryKind) {
     return '收集灵感';
   }
 
+  if (activeTab === 'guide') {
+    return '添加攻略';
+  }
+
+  if (activeTab === 'plan') {
+    return '添加行程';
+  }
+
   return `添加到${kindLabels[activeTab]}`;
+}
+
+function getTitlePlaceholder(activeTab: EntryKind) {
+  if (activeTab === 'idea') {
+    return '标题，可不填，比如 喀什咖啡店';
+  }
+
+  if (activeTab === 'guide') {
+    return '攻略标题，可不填，比如 飞书攻略文档';
+  }
+
+  if (activeTab === 'plan') {
+    return '行程标题，比如 Day 1 喀什';
+  }
+
+  return '标题';
+}
+
+function getNotePlaceholder(activeTab: EntryKind) {
+  if (activeTab === 'idea') {
+    return '自己写灵感，也可以只放上面的链接';
+  }
+
+  if (activeTab === 'guide') {
+    return '补充攻略重点，或粘贴飞书文档里的关键段落';
+  }
+
+  if (activeTab === 'plan') {
+    return '写每天安排、交通、住宿和待确认事项';
+  }
+
+  return '记录一点细节';
 }
 
 function UsageGuide() {
@@ -1135,12 +1317,32 @@ function getDraftTitle(
     return `${getLinkSourceName(sourceUrl)} 灵感`;
   }
 
+  if (activeTab === 'guide' && sourceUrl) {
+    return `${getLinkSourceName(sourceUrl)} 攻略文档`;
+  }
+
   if (activeTab === 'idea' && note) {
     const firstLine = note.split('\n')[0].trim();
     return firstLine.length > 18 ? `${firstLine.slice(0, 18)}...` : firstLine;
   }
 
   return '';
+}
+
+function getDraftNote(note: string, sourceUrl: string, activeTab: EntryKind) {
+  if (note) {
+    return note;
+  }
+
+  if (activeTab === 'idea' && sourceUrl) {
+    return '先收进来，稍后整理地点、亮点和注意事项。';
+  }
+
+  if (activeTab === 'guide' && sourceUrl) {
+    return `已关联 ${getLinkSourceName(sourceUrl)} 攻略文档，待核对日期、地点、交通、预约和预算。`;
+  }
+
+  return note;
 }
 
 function normalizeSourceUrl(rawValue: string) {
@@ -1173,6 +1375,10 @@ function getLinkSourceName(sourceUrl: string) {
 
     if (host.includes('douyin')) {
       return '抖音';
+    }
+
+    if (host.includes('feishu') || host.includes('larksuite')) {
+      return '飞书文档';
     }
 
     return host;
@@ -1208,6 +1414,31 @@ function buildIdeaSummaryDraft({
   ].join('\n');
 }
 
+function buildGuideDocSummaryDraft({
+  city,
+  note,
+  rawSourceText,
+  sourceUrl,
+  title,
+}: {
+  city: CitySpace;
+  note: string;
+  rawSourceText: string;
+  sourceUrl: string;
+  title: string;
+}) {
+  const sourceName = getLinkSourceName(sourceUrl);
+  const cleanShareText = getUsefulShareText(rawSourceText, sourceUrl);
+  const signal = cleanShareText || title.trim() || note.trim() || `${city.title} 攻略文档`;
+
+  return [
+    `文档来源：${sourceName}`,
+    `文档主题：${clipText(signal, 56)}`,
+    '可用于生成：每日路线、交通衔接、住宿区域、预约/门票待办。',
+    '待接入：服务端读取飞书正文后，自动抽取地点、时间和注意事项。',
+  ].join('\n');
+}
+
 function buildGuideDraftFromIdeas(city: CitySpace, ideas: CityEntry[]) {
   const selectedIdeas = [...ideas]
     .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt))
@@ -1236,6 +1467,44 @@ function buildGuideDraftFromIdeas(city: CitySpace, ideas: CityEntry[]) {
   }
 
   lines.push('下一步：把确认后的地址、时间和预约信息补到攻略里，再把已定日期放进行程。');
+
+  return lines.join('\n');
+}
+
+function buildPlanDraftFromGuides(city: CitySpace, guides: CityEntry[], ideas: CityEntry[]) {
+  const selectedGuides = [...guides]
+    .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt))
+    .slice(0, 10);
+  const dayCount = Math.min(7, Math.max(1, selectedGuides.length));
+  const inspirationAuthors = Array.from(new Set(ideas.map((entry) => entry.author))).slice(0, 4);
+  const lines = [
+    `目标：根据 ${city.title} 的 ${selectedGuides.length} 条攻略生成 ${dayCount} 天行程草稿。`,
+    `攻略范围：${city.destination}`,
+    inspirationAuthors.length
+      ? `已参考灵感作者：${inspirationAuthors.join('、')}`
+      : '已参考灵感作者：暂无同步灵感',
+    '生成原则：每天地点尽量顺路，上午安排核心点，下午安排体验/移动，晚上留给吃饭和休息。',
+    '',
+  ];
+
+  for (let index = 0; index < dayCount; index += 1) {
+    const guide = selectedGuides[index];
+    const backupGuide = selectedGuides[(index + 1) % selectedGuides.length] ?? guide;
+    const sourceLabel = guide.sourceUrl ? `来源：${getLinkSourceName(guide.sourceUrl)}` : '来源：手写攻略';
+    const guideSummary = guide.aiSummary || guide.note;
+
+    lines.push(
+      `Day ${index + 1}：${clipText(guide.title, 22)}`,
+      `依据：${sourceLabel}`,
+      `上午：按「${clipText(guide.title, 18)}」里的核心地点安排，先核对开放时间和预约。`,
+      `下午：继续处理 ${clipText(guideSummary, 46)}，并把交通耗时留足。`,
+      `晚上：围绕 ${clipText(backupGuide.title, 18)} 附近吃饭、散步或休息。`,
+      '待确认：实际地址、营业时间、门票/预约、跨城交通、住宿位置。',
+      '',
+    );
+  }
+
+  lines.push('下一步：接入飞书正文读取后，可以把文档里的具体时间、地址和交通直接填进每天安排。');
 
   return lines.join('\n');
 }
