@@ -19,6 +19,7 @@ import { Session } from '@supabase/supabase-js';
 import { isSupabaseConfigured } from './src/config/env';
 import { defaultLocalState } from './src/data/seed';
 import {
+  createCodexExport,
   deleteCityEntry,
   getCurrentSession,
   joinCityByInvite,
@@ -52,10 +53,11 @@ const syncLabels: Record<CityEntry['syncStatus'], string> = {
   error: '待重试',
 };
 
-const appCapabilityVersion = '版本 1.0.7 · 功能 2026-06-06.5';
-const updateSuccessSignal = '看到删除确认弹窗就是新版本。';
+const appCapabilityVersion = '版本 1.0.8 · 功能 2026-06-06.6';
+const updateSuccessSignal = '看到 Codex 导出码就是新版本。';
 
 type UpdateStatus = 'idle' | 'unsupported' | 'checking' | 'downloading' | 'ready' | 'restarting' | 'error';
+type CodexExportState = { token: string; expiresAt: string };
 
 export default function App() {
   const [screen, setScreen] = useState<'home' | 'detail'>('home');
@@ -74,6 +76,7 @@ export default function App() {
   const [draftAiSummary, setDraftAiSummary] = useState('');
   const [draftTag, setDraftTag] = useState(tags[0]);
   const [pendingDeleteEntry, setPendingDeleteEntry] = useState<CityEntry | null>(null);
+  const [codexExport, setCodexExport] = useState<CodexExportState | null>(null);
   const [cityName, setCityName] = useState('');
   const [cityFocus, setCityFocus] = useState('');
   const [email, setEmail] = useState('');
@@ -229,6 +232,7 @@ export default function App() {
       ...current,
       activeCityId: cityId,
     }));
+    setCodexExport(null);
     setActiveTab('idea');
     setScreen('detail');
   }
@@ -621,6 +625,7 @@ export default function App() {
     try {
       await signOut();
       setSession(null);
+      setCodexExport(null);
       setRemoteMessage('已退出登录');
     } catch (error) {
       setRemoteMessage(error instanceof Error ? error.message : '退出失败');
@@ -657,6 +662,29 @@ export default function App() {
     }
   }
 
+  async function handleCreateCodexExport() {
+    if (!session) {
+      setRemoteMessage('请先登录');
+      return;
+    }
+
+    setIsRemoteBusy(true);
+    setRemoteMessage('正在同步并生成 Codex 导出码');
+
+    try {
+      const syncedState = await pushActiveCity(cityState, session);
+      setCityState(syncedState);
+
+      const nextExport = await createCodexExport(syncedState.activeCityId);
+      setCodexExport(nextExport);
+      setRemoteMessage('Codex 导出码已生成');
+    } catch (error) {
+      setRemoteMessage(error instanceof Error ? error.message : 'Codex 导出码生成失败');
+    } finally {
+      setIsRemoteBusy(false);
+    }
+  }
+
   async function handleJoinInvite() {
     const code = inviteCode.trim();
 
@@ -688,6 +716,7 @@ export default function App() {
         ],
       }));
       setInviteCode('');
+      setCodexExport(null);
       setActiveTab('idea');
       setScreen('detail');
       setRemoteMessage('已加入城市');
@@ -939,6 +968,35 @@ export default function App() {
             >
               <Text style={styles.primaryButtonText}>加入</Text>
             </Pressable>
+          </View>
+          <View style={styles.codexExportSection}>
+            <Text style={styles.inputLabel}>Codex 自动整理</Text>
+            <Text style={styles.codexExportText}>
+              登录后生成 15 分钟导出码。把导出码发给 Codex，Codex 就能读取当前城市已同步的灵感和攻略。
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={!session || isRemoteBusy}
+              onPress={handleCreateCodexExport}
+              style={({ pressed }) => [
+                styles.codexExportButton,
+                pressed && styles.secondaryButtonPressed,
+                (!session || isRemoteBusy) && styles.buttonDisabled,
+              ]}
+            >
+              <Text style={styles.secondaryButtonText}>生成 Codex 导出码</Text>
+            </Pressable>
+            {codexExport ? (
+              <View style={styles.codexTokenRow}>
+                <View>
+                  <Text style={styles.codexTokenLabel}>导出码</Text>
+                  <Text style={styles.codexToken}>{codexExport.token}</Text>
+                </View>
+                <Text style={styles.codexTokenMeta}>
+                  {formatExportExpiry(codexExport.expiresAt)} 前有效
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -1438,6 +1496,19 @@ function getCountsForCity(cityId: string, entries: CityEntry[]) {
     }),
     {} as Record<EntryKind, number>,
   );
+}
+
+function formatExportExpiry(expiresAt: string) {
+  const expiryDate = new Date(expiresAt);
+
+  if (Number.isNaN(expiryDate.getTime())) {
+    return '15 分钟内';
+  }
+
+  const hours = String(expiryDate.getHours()).padStart(2, '0');
+  const minutes = String(expiryDate.getMinutes()).padStart(2, '0');
+
+  return `${hours}:${minutes}`;
 }
 
 function isDeletableEntryKind(kind: EntryKind) {
@@ -2080,6 +2151,55 @@ const styles = StyleSheet.create({
   },
   joinInput: {
     flex: 1,
+  },
+  codexExportSection: {
+    borderColor: '#d8e2ee',
+    borderTopWidth: 1,
+    marginTop: 14,
+    paddingTop: 14,
+  },
+  codexExportText: {
+    color: '#526071',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  codexExportButton: {
+    alignItems: 'center',
+    backgroundColor: '#e9eef6',
+    borderRadius: 8,
+    justifyContent: 'center',
+    marginTop: 10,
+    minHeight: 42,
+    paddingHorizontal: 10,
+  },
+  codexTokenRow: {
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderColor: '#d8e2ee',
+    borderLeftWidth: 3,
+    borderRadius: 6,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  codexTokenLabel: {
+    color: '#7a8597',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  codexToken: {
+    color: '#152033',
+    fontSize: 17,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  codexTokenMeta: {
+    color: '#526071',
+    fontSize: 12,
+    fontWeight: '700',
   },
   segmentedControl: {
     backgroundColor: '#dfe8f2',

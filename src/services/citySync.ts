@@ -29,6 +29,11 @@ type RemoteEntryRow = {
   updated_at: string;
 };
 
+type RemoteCodexExportRow = {
+  token: string;
+  expires_at: string;
+};
+
 function requireSupabase() {
   if (!supabase) {
     throw new Error('Supabase 还没有配置。请先设置 EXPO_PUBLIC_SUPABASE_URL 和 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY。');
@@ -182,6 +187,30 @@ export async function deleteCityEntry(entry: CityEntry) {
   }
 }
 
+export async function createCodexExport(cityId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .rpc('create_codex_export', { city_id_input: cityId })
+    .single<RemoteCodexExportRow>();
+
+  if (error) {
+    if (isCodexExportSchemaError(error)) {
+      throw new Error('请先在 Supabase SQL 编辑器跑 Codex 导出码 SQL。');
+    }
+
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error('Codex 导出码没有生成成功。');
+  }
+
+  return {
+    expiresAt: data.expires_at,
+    token: data.token,
+  };
+}
+
 async function fetchRemoteCity(cityId: string) {
   const client = requireSupabase();
   const { data: city, error: cityError } = await client
@@ -291,4 +320,10 @@ function isSourceColumnError(error: { message?: string; details?: string; hint?:
   const text = `${error.message ?? ''} ${error.details ?? ''} ${error.hint ?? ''}`.toLowerCase();
 
   return text.includes('source_url') || text.includes('ai_summary') || text.includes('schema cache');
+}
+
+function isCodexExportSchemaError(error: { message?: string; details?: string; hint?: string }) {
+  const text = `${error.message ?? ''} ${error.details ?? ''} ${error.hint ?? ''}`.toLowerCase();
+
+  return text.includes('create_codex_export') || text.includes('codex_exports');
 }

@@ -158,6 +158,22 @@ App -> Supabase Edge Function -> link/doc fetcher -> AI model API -> saved ai_su
 
 Keeping model calls and Feishu credentials on the server avoids putting private API keys into the mobile app and gives one place to add document fetching, link fetching, rate limits, and better prompts.
 
+## Codex Export Codes
+
+For owner-driven Codex organization, the app can generate a short-lived export code for the current city:
+
+1. Run `supabase/migrations/20260606001000_codex_exports.sql` in the Supabase SQL Editor.
+2. In the app, log in from `共享空间`.
+3. Tap `生成 Codex 导出码`.
+4. Send the code to Codex within 15 minutes.
+5. Codex can read the synced city data with:
+
+```bash
+npm run codex:read-export -- CODEX_EXPORT_CODE
+```
+
+The export code is token-based and temporary. Codex does not need the user's phone storage or a long-lived Supabase admin key; it reads through the `read_codex_export` RPC using the publishable key and the user-provided code.
+
 ## Next Milestones
 
 1. Smoke test Supabase auth on a physical iOS and Android device.
