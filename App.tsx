@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   AppState,
   Linking,
+  Modal,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -51,8 +52,8 @@ const syncLabels: Record<CityEntry['syncStatus'], string> = {
   error: '待重试',
 };
 
-const appCapabilityVersion = '版本 1.0.6 · 功能 2026-06-06.4';
-const updateSuccessSignal = '看到更紧凑的卡片和浅黄色生成提醒就是新版本。';
+const appCapabilityVersion = '版本 1.0.7 · 功能 2026-06-06.5';
+const updateSuccessSignal = '看到删除确认弹窗就是新版本。';
 
 type UpdateStatus = 'idle' | 'unsupported' | 'checking' | 'downloading' | 'ready' | 'restarting' | 'error';
 
@@ -72,6 +73,7 @@ export default function App() {
   const [draftUrl, setDraftUrl] = useState('');
   const [draftAiSummary, setDraftAiSummary] = useState('');
   const [draftTag, setDraftTag] = useState(tags[0]);
+  const [pendingDeleteEntry, setPendingDeleteEntry] = useState<CityEntry | null>(null);
   const [cityName, setCityName] = useState('');
   const [cityFocus, setCityFocus] = useState('');
   const [email, setEmail] = useState('');
@@ -481,6 +483,29 @@ export default function App() {
     }
   }
 
+  function confirmDeleteEntry(entry: CityEntry) {
+    if (!isDeletableEntryKind(entry.kind)) {
+      return;
+    }
+
+    setPendingDeleteEntry(entry);
+  }
+
+  function cancelPendingDelete() {
+    setPendingDeleteEntry(null);
+  }
+
+  function confirmPendingDelete() {
+    const entry = pendingDeleteEntry;
+
+    if (!entry) {
+      return;
+    }
+
+    setPendingDeleteEntry(null);
+    void handleDeleteEntry(entry);
+  }
+
   async function handleDeleteEntry(entry: CityEntry) {
     if (!isDeletableEntryKind(entry.kind)) {
       return;
@@ -783,6 +808,11 @@ export default function App() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
+      <DeleteConfirmModal
+        entry={pendingDeleteEntry}
+        onCancel={cancelPendingDelete}
+        onConfirm={confirmPendingDelete}
+      />
       <ScrollView contentContainerStyle={styles.screen} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View>
@@ -1098,7 +1128,7 @@ export default function App() {
                         accessibilityRole="button"
                         accessibilityLabel={`删除${kindLabels[entry.kind]}`}
                         disabled={isRemoteBusy}
-                        onPress={() => handleDeleteEntry(entry)}
+                        onPress={() => confirmDeleteEntry(entry)}
                         style={({ pressed }) => [
                           styles.deleteEntryButton,
                           pressed && styles.deleteEntryButtonPressed,
@@ -1171,6 +1201,63 @@ function UpdatePanel({
         </Text>
       </Pressable>
     </View>
+  );
+}
+
+function DeleteConfirmModal({
+  entry,
+  onCancel,
+  onConfirm,
+}: {
+  entry: CityEntry | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const kindLabel = entry ? kindLabels[entry.kind] : '记录';
+  const syncScope =
+    entry?.remoteId && entry.syncStatus === 'synced'
+      ? '这条记录已同步，确认后会先尝试删除共享空间里的记录。'
+      : '确认后会从当前城市里删除。';
+
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={onCancel}
+      transparent
+      visible={Boolean(entry)}
+    >
+      <View style={styles.modalBackdrop}>
+        <View style={styles.confirmDialog}>
+          <Text style={styles.confirmTitle}>删除{kindLabel}？</Text>
+          <Text style={styles.confirmText}>
+            确定删除「{entry ? clipText(entry.title, 22) : ''}」吗？删除后不能在 app 内恢复。
+          </Text>
+          <Text style={styles.confirmHint}>{syncScope}</Text>
+          <View style={styles.confirmActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onCancel}
+              style={({ pressed }) => [
+                styles.cancelDeleteButton,
+                pressed && styles.secondaryButtonPressed,
+              ]}
+            >
+              <Text style={styles.cancelDeleteText}>取消</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onConfirm}
+              style={({ pressed }) => [
+                styles.confirmDeleteButton,
+                pressed && styles.confirmDeleteButtonPressed,
+              ]}
+            >
+              <Text style={styles.confirmDeleteText}>删除</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -2222,6 +2309,75 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.45,
+  },
+  modalBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(21, 32, 51, 0.38)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  confirmDialog: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    maxWidth: 360,
+    padding: 18,
+    width: '100%',
+    ...panelShadow,
+  },
+  confirmTitle: {
+    color: '#152033',
+    fontSize: 18,
+    fontWeight: '900',
+    lineHeight: 24,
+  },
+  confirmText: {
+    color: '#48576b',
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 21,
+    marginTop: 10,
+  },
+  confirmHint: {
+    color: '#7a4c13',
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 17,
+    marginTop: 8,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  cancelDeleteButton: {
+    alignItems: 'center',
+    backgroundColor: '#e9eef6',
+    borderRadius: 8,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  cancelDeleteText: {
+    color: '#152033',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  confirmDeleteButton: {
+    alignItems: 'center',
+    backgroundColor: '#a23b31',
+    borderRadius: 8,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  confirmDeleteButtonPressed: {
+    backgroundColor: '#842e27',
+  },
+  confirmDeleteText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
   },
   listHeader: {
     alignItems: 'center',
