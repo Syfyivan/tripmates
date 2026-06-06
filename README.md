@@ -140,6 +140,10 @@ Friends collect Xiaohongshu/Douyin links in Tripmates
 
 Xiaohongshu image-text posts, long notes, and Douyin posts with clear captions are easier to organize than pure short videos because they usually include explicit names, addresses, prices, route order, and caveats. For short videos, add a one-line note in Tripmates explaining why it is worth saving.
 
+Idea and guide cards can be deleted from the card footer. If a card has already been synced, the user must be logged in and the Supabase delete policy from `supabase/migrations/20260606000000_allow_entry_delete.sql` must be applied.
+
+The in-app guide and itinerary generation buttons are draft helpers for the main organizer. Friends should collect links and add context first, then let the main organizer decide when to generate a guide or itinerary draft from the shared material.
+
 Later, real AI summarization can run server-side. The app still should not fetch or understand Xiaohongshu/Douyin pages or Feishu document bodies on its own. A production path would be:
 
 ```text

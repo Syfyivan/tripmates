@@ -18,6 +18,7 @@ import { Session } from '@supabase/supabase-js';
 import { isSupabaseConfigured } from './src/config/env';
 import { defaultLocalState } from './src/data/seed';
 import {
+  deleteCityEntry,
   getCurrentSession,
   joinCityByInvite,
   pushActiveCity,
@@ -50,7 +51,7 @@ const syncLabels: Record<CityEntry['syncStatus'], string> = {
   error: '待重试',
 };
 
-const appCapabilityVersion = '功能版本 2026-06-06.2';
+const appCapabilityVersion = '功能版本 2026-06-06.3';
 const updateSuccessSignal = '看到“收集灵感”和“小红书 / 抖音链接”就是新版本。';
 
 type UpdateStatus = 'idle' | 'unsupported' | 'checking' | 'downloading' | 'ready' | 'restarting' | 'error';
@@ -478,6 +479,39 @@ export default function App() {
     } catch {
       setStorageMessage('链接打开失败');
     }
+  }
+
+  async function handleDeleteEntry(entry: CityEntry) {
+    if (!isDeletableEntryKind(entry.kind)) {
+      return;
+    }
+
+    if (entry.remoteId && entry.syncStatus === 'synced') {
+      if (!session) {
+        setRemoteMessage('已同步记录需要登录后删除');
+        return;
+      }
+
+      setIsRemoteBusy(true);
+      setRemoteMessage('正在删除远端记录');
+
+      try {
+        await deleteCityEntry(entry);
+      } catch (error) {
+        setRemoteMessage(error instanceof Error ? error.message : '远端删除失败');
+        setIsRemoteBusy(false);
+        return;
+      }
+
+      setIsRemoteBusy(false);
+      setRemoteMessage('记录已删除');
+    }
+
+    setCityState((current) => ({
+      ...current,
+      entries: current.entries.filter((candidate) => candidate.id !== entry.id),
+    }));
+    setStorageMessage(`${kindLabels[entry.kind]}已删除`);
   }
 
   async function checkForAppUpdate(isAutomatic = false) {
@@ -1008,56 +1042,77 @@ export default function App() {
         </View>
 
         <View style={styles.entryList}>
-          {activeEntries.map((entry) => (
-            <View key={entry.id} style={styles.entryCard}>
-              <View style={styles.entryTopRow}>
-                <View style={styles.entryTag}>
-                  <Text style={styles.entryTagText}>{entry.tag}</Text>
-                </View>
-                <View
-                  style={[
-                    styles.syncBadge,
-                    entry.syncStatus === 'synced' && styles.syncBadgeSynced,
-                    entry.syncStatus === 'error' && styles.syncBadgeError,
-                  ]}
-                >
-                  <Text
+          {activeEntries.map((entry) => {
+            const canDeleteEntry = isDeletableEntryKind(entry.kind);
+
+            return (
+              <View key={entry.id} style={styles.entryCard}>
+                <View style={styles.entryTopRow}>
+                  <View style={styles.entryTag}>
+                    <Text style={styles.entryTagText}>{entry.tag}</Text>
+                  </View>
+                  <View
                     style={[
-                      styles.syncBadgeText,
-                      entry.syncStatus === 'synced' && styles.syncBadgeTextSynced,
-                      entry.syncStatus === 'error' && styles.syncBadgeTextError,
+                      styles.syncBadge,
+                      entry.syncStatus === 'synced' && styles.syncBadgeSynced,
+                      entry.syncStatus === 'error' && styles.syncBadgeError,
                     ]}
                   >
-                    {syncLabels[entry.syncStatus]}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.syncBadgeText,
+                        entry.syncStatus === 'synced' && styles.syncBadgeTextSynced,
+                        entry.syncStatus === 'error' && styles.syncBadgeTextError,
+                      ]}
+                    >
+                      {syncLabels[entry.syncStatus]}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.entryTitle}>{entry.title}</Text>
+                <Text style={styles.entryNote}>{entry.note}</Text>
+                {entry.sourceUrl ? (
+                  <Pressable
+                    accessibilityRole="link"
+                    onPress={() => openEntryLink(entry.sourceUrl!)}
+                    style={({ pressed }) => [styles.sourceLink, pressed && styles.sourceLinkPressed]}
+                  >
+                    <Text style={styles.sourceLinkLabel}>来源</Text>
+                    <Text style={styles.sourceLinkText} numberOfLines={1}>
+                      {getLinkSourceName(entry.sourceUrl)} · 打开链接
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {entry.aiSummary ? (
+                  <View style={styles.aiSummaryBox}>
+                    <Text style={styles.aiSummaryLabel}>整理备注</Text>
+                    <Text style={styles.aiSummaryText}>{entry.aiSummary}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.entryBottomRow}>
+                  <Text style={styles.entryAuthor}>由 {entry.author} 添加</Text>
+                  <View style={styles.entryMetaActions}>
+                    <Text style={styles.entryMeta}>{entry.meta}</Text>
+                    {canDeleteEntry ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`删除${kindLabels[entry.kind]}`}
+                        disabled={isRemoteBusy}
+                        onPress={() => handleDeleteEntry(entry)}
+                        style={({ pressed }) => [
+                          styles.deleteEntryButton,
+                          pressed && styles.deleteEntryButtonPressed,
+                          isRemoteBusy && styles.buttonDisabled,
+                        ]}
+                      >
+                        <Text style={styles.deleteEntryText}>删除</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                 </View>
               </View>
-              <Text style={styles.entryTitle}>{entry.title}</Text>
-              <Text style={styles.entryNote}>{entry.note}</Text>
-              {entry.sourceUrl ? (
-                <Pressable
-                  accessibilityRole="link"
-                  onPress={() => openEntryLink(entry.sourceUrl!)}
-                  style={({ pressed }) => [styles.sourceLink, pressed && styles.sourceLinkPressed]}
-                >
-                  <Text style={styles.sourceLinkLabel}>来源</Text>
-                  <Text style={styles.sourceLinkText} numberOfLines={1}>
-                    {getLinkSourceName(entry.sourceUrl)} · 打开链接
-                  </Text>
-                </Pressable>
-              ) : null}
-              {entry.aiSummary ? (
-                <View style={styles.aiSummaryBox}>
-                  <Text style={styles.aiSummaryLabel}>整理备注</Text>
-                  <Text style={styles.aiSummaryText}>{entry.aiSummary}</Text>
-                </View>
-              ) : null}
-              <View style={styles.entryBottomRow}>
-                <Text style={styles.entryAuthor}>由 {entry.author} 添加</Text>
-                <Text style={styles.entryMeta}>{entry.meta}</Text>
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -1096,7 +1151,7 @@ function UpdatePanel({
             如果还显示“添加到灵感”，点检查更新；下载后必须点“重启更新”。
           </Text>
           <Text style={styles.updateHelpText}>
-            仍无变化时，安装 Android build 2 的 APK。
+            仍无变化时，安装最新 Android preview APK。
           </Text>
         </View>
       </View>
@@ -1137,6 +1192,9 @@ function GuideGeneratorPanel({
             ? `已有 ${ideaCount} 条灵感，可以先排成每日攻略草稿。`
             : '先在灵感里放链接或想法，再回来生成攻略草稿。'}
         </Text>
+        <Text style={styles.generatorWarning}>
+          仅建议主整理人使用：灵感未核对前，朋友不要随手生成攻略。
+        </Text>
       </View>
       <Pressable
         accessibilityRole="button"
@@ -1173,6 +1231,9 @@ function ItineraryGeneratorPanel({
           {hasGuides
             ? `已有 ${guideCount} 条攻略，其中 ${docCount} 条关联了文档，可以生成行程草稿。`
             : '先在攻略里上传飞书文档或添加攻略草稿，再生成行程。'}
+        </Text>
+        <Text style={styles.generatorWarning}>
+          仅建议主整理人使用：攻略和日期未确认前，朋友不要随手生成行程。
         </Text>
       </View>
       <Pressable
@@ -1273,9 +1334,10 @@ function UsageGuide() {
       <Text style={styles.guideText}>2. 点进城市后，把内容分到灵感、攻略、行程、回忆。</Text>
       <Text style={styles.guideText}>3. 灵感页只收集小红书或抖音链接，保存后可以让 Codex 读取内容再整理。</Text>
       <Text style={styles.guideText}>4. 图文或长文更容易整理地点、路线、价格和注意事项；短视频最好补一句重点。</Text>
-      <Text style={styles.guideText}>5. 攻略页可以贴飞书文档链接，行程页可以按攻略生成草稿。</Text>
-      <Text style={styles.guideText}>6. 如果仍看到“添加到灵感”，说明还在旧版本；回到顶部检查更新或安装新版 APK。</Text>
-      <Text style={styles.guideText}>7. 登录后可以同步当前城市，再用邀请码邀请朋友加入。</Text>
+      <Text style={styles.guideText}>5. 灵感和攻略卡片底部可以删除；已同步内容需要登录后删除。</Text>
+      <Text style={styles.guideText}>6. 攻略和行程生成建议只由主整理人操作，朋友先负责收集和补充。</Text>
+      <Text style={styles.guideText}>7. 如果仍看到“添加到灵感”，说明还在旧版本；回到顶部检查更新或安装新版 APK。</Text>
+      <Text style={styles.guideText}>8. 登录后可以同步当前城市，再用邀请码邀请朋友加入。</Text>
     </View>
   );
 }
@@ -1289,6 +1351,10 @@ function getCountsForCity(cityId: string, entries: CityEntry[]) {
     }),
     {} as Record<EntryKind, number>,
   );
+}
+
+function isDeletableEntryKind(kind: EntryKind) {
+  return kind === 'idea' || kind === 'guide';
 }
 
 function isOtaUpdateRuntimeAvailable() {
@@ -1950,6 +2016,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 20,
   },
+  generatorWarning: {
+    color: '#8a5a1f',
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 17,
+    marginTop: 6,
+  },
   generatorButton: {
     alignItems: 'center',
     backgroundColor: '#152033',
@@ -2259,5 +2332,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     marginRight: 8,
+  },
+  entryMetaActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  deleteEntryButton: {
+    backgroundColor: '#fde5e2',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  deleteEntryButtonPressed: {
+    backgroundColor: '#f8d0cb',
+  },
+  deleteEntryText: {
+    color: '#a23b31',
+    fontSize: 12,
+    fontWeight: '900',
   },
 });

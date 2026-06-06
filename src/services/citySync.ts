@@ -164,6 +164,24 @@ export async function joinCityByInvite(inviteCode: string) {
   return fetchRemoteCity(joinedCityId);
 }
 
+export async function deleteCityEntry(entry: CityEntry) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('city_entries')
+    .delete()
+    .eq('id', entry.remoteId ?? entry.id)
+    .eq('city_id', entry.cityId)
+    .select('id');
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.length) {
+    throw new Error('远端记录没有删除成功，请确认已在 Supabase 跑删除权限 SQL。');
+  }
+}
+
 async function fetchRemoteCity(cityId: string) {
   const client = requireSupabase();
   const { data: city, error: cityError } = await client
