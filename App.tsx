@@ -275,6 +275,12 @@ export default function App() {
       activeTab === 'idea' || activeTab === 'guide'
         ? normalizedDraftUrl || normalizeSourceUrl(note)
         : '';
+
+    if (activeTab === 'idea' && sourceUrl && !isSupportedInspirationLink(sourceUrl)) {
+      setStorageMessage('灵感链接目前只支持小红书或抖音');
+      return;
+    }
+
     const title = getDraftTitle(draftTitle, note, sourceUrl, activeTab);
     const finalNote = getDraftNote(note, sourceUrl, activeTab);
 
@@ -312,32 +318,29 @@ export default function App() {
     setDraftAiSummary('');
   }
 
-  function handlePrepareLinkSummary() {
+  function handlePrepareInspirationLink() {
     const sourceUrl = normalizedDraftUrl || normalizeSourceUrl(draftNote);
 
     if (!sourceUrl) {
-      setStorageMessage('先粘贴一个灵感链接');
+      setStorageMessage('先粘贴小红书或抖音链接');
+      return;
+    }
+
+    if (!isSupportedInspirationLink(sourceUrl)) {
+      setStorageMessage('灵感链接目前只支持小红书或抖音');
       return;
     }
 
     const sourceName = getLinkSourceName(sourceUrl);
-    const nextSummary = buildIdeaSummaryDraft({
-      city: activeCity,
-      note: draftNote,
-      rawSourceText: draftUrl,
-      sourceUrl,
-      tag: draftTag,
-      title: draftTitle,
-    });
 
     setDraftUrl(sourceUrl);
-    setDraftAiSummary(nextSummary);
+    setDraftAiSummary('');
     setDraftNote((current) =>
       current.trim()
         ? current
-        : `先收进来：${sourceName} 里的旅行灵感，待核对地点、时间、交通和适合放进哪一天。`,
+        : `已收集 ${sourceName} 链接。图文或长文更适合后续用 Codex 整理；如果是短视频，建议补一句视频重点。`,
     );
-    setStorageMessage('链接摘要已生成');
+    setStorageMessage('链接已准备保存，点添加完成收集');
   }
 
   function handleDraftUrlChange(value: string) {
@@ -351,16 +354,7 @@ export default function App() {
     }
 
     if (activeTab === 'idea') {
-      setDraftAiSummary(
-        buildIdeaSummaryDraft({
-          city: activeCity,
-          note: draftNote,
-          rawSourceText: value,
-          sourceUrl,
-          tag: draftTag,
-          title: draftTitle,
-        }),
-      );
+      setDraftAiSummary('');
       return;
     }
 
@@ -935,7 +929,7 @@ export default function App() {
                   {activeTab === 'idea' ? '小红书 / 抖音链接' : '飞书文档链接'}
                 </Text>
                 <Text style={styles.inputMeta}>
-                  {activeTab === 'idea' ? '可粘贴整段分享文本' : '粘贴分享链接'}
+                  {activeTab === 'idea' ? '图文/长文优先' : '粘贴分享链接'}
                 </Text>
               </View>
               <TextInput
@@ -945,7 +939,7 @@ export default function App() {
                 onChangeText={handleDraftUrlChange}
                 placeholder={
                   activeTab === 'idea'
-                    ? '粘贴链接，比如 https://...'
+                    ? '贴小红书/抖音链接；图文或长文更好整理'
                     : '粘贴飞书文档链接，比如 https://...'
                 }
                 placeholderTextColor="#8a94a6"
@@ -954,7 +948,7 @@ export default function App() {
               <View style={styles.linkActionRow}>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={activeTab === 'idea' ? handlePrepareLinkSummary : handlePrepareGuideDoc}
+                  onPress={activeTab === 'idea' ? handlePrepareInspirationLink : handlePrepareGuideDoc}
                   style={({ pressed }) => [
                     styles.secondaryButton,
                     styles.summaryButton,
@@ -962,12 +956,12 @@ export default function App() {
                   ]}
                 >
                   <Text style={styles.secondaryButtonText}>
-                    {activeTab === 'idea' ? 'AI 总结链接' : '关联文档'}
+                    {activeTab === 'idea' ? '确认链接' : '关联文档'}
                   </Text>
                 </Pressable>
                 <Text style={styles.linkHint}>
                   {activeTab === 'idea'
-                    ? '生成可编辑摘要和待核对清单。'
+                    ? '只保存链接；之后可让 Codex 读取内容再整理。'
                     : '保存文档来源，供行程生成引用。'}
                 </Text>
               </View>
@@ -1054,7 +1048,7 @@ export default function App() {
               ) : null}
               {entry.aiSummary ? (
                 <View style={styles.aiSummaryBox}>
-                  <Text style={styles.aiSummaryLabel}>AI 摘要</Text>
+                  <Text style={styles.aiSummaryLabel}>整理备注</Text>
                   <Text style={styles.aiSummaryText}>{entry.aiSummary}</Text>
                 </View>
               ) : null}
@@ -1257,7 +1251,7 @@ function getTitlePlaceholder(activeTab: EntryKind) {
 
 function getNotePlaceholder(activeTab: EntryKind) {
   if (activeTab === 'idea') {
-    return '自己写灵感，也可以只放上面的链接';
+    return '可补一句：为什么想去 / 视频里提到什么';
   }
 
   if (activeTab === 'guide') {
@@ -1277,10 +1271,11 @@ function UsageGuide() {
       <Text style={styles.sectionLabel}>使用说明</Text>
       <Text style={styles.guideText}>1. 首页先建城市卡片，比如新疆、广西。</Text>
       <Text style={styles.guideText}>2. 点进城市后，把内容分到灵感、攻略、行程、回忆。</Text>
-      <Text style={styles.guideText}>3. 灵感页标题是“收集灵感”时，标题下面可以贴小红书、抖音或网页链接。</Text>
-      <Text style={styles.guideText}>4. 攻略页可以贴飞书文档链接，行程页可以按攻略生成草稿。</Text>
-      <Text style={styles.guideText}>5. 如果仍看到“添加到灵感”，说明还在旧版本；回到顶部检查更新或安装新版 APK。</Text>
-      <Text style={styles.guideText}>6. 登录后可以同步当前城市，再用邀请码邀请朋友加入。</Text>
+      <Text style={styles.guideText}>3. 灵感页只收集小红书或抖音链接，保存后可以让 Codex 读取内容再整理。</Text>
+      <Text style={styles.guideText}>4. 图文或长文更容易整理地点、路线、价格和注意事项；短视频最好补一句重点。</Text>
+      <Text style={styles.guideText}>5. 攻略页可以贴飞书文档链接，行程页可以按攻略生成草稿。</Text>
+      <Text style={styles.guideText}>6. 如果仍看到“添加到灵感”，说明还在旧版本；回到顶部检查更新或安装新版 APK。</Text>
+      <Text style={styles.guideText}>7. 登录后可以同步当前城市，再用邀请码邀请朋友加入。</Text>
     </View>
   );
 }
@@ -1381,52 +1376,54 @@ function normalizeSourceUrl(rawValue: string) {
 }
 
 function getLinkSourceName(sourceUrl: string) {
+  const sourceKind = getLinkSourceKind(sourceUrl);
+
+  if (sourceKind === 'xiaohongshu') {
+    return '小红书';
+  }
+
+  if (sourceKind === 'douyin') {
+    return '抖音';
+  }
+
+  if (sourceKind === 'feishu') {
+    return '飞书文档';
+  }
+
   try {
     const host = new URL(sourceUrl).hostname.replace(/^www\./, '');
-
-    if (host.includes('xiaohongshu')) {
-      return '小红书';
-    }
-
-    if (host.includes('douyin')) {
-      return '抖音';
-    }
-
-    if (host.includes('feishu') || host.includes('larksuite')) {
-      return '飞书文档';
-    }
-
     return host;
   } catch {
     return '链接';
   }
 }
 
-function buildIdeaSummaryDraft({
-  city,
-  note,
-  rawSourceText,
-  sourceUrl,
-  tag,
-  title,
-}: {
-  city: CitySpace;
-  note: string;
-  rawSourceText: string;
-  sourceUrl: string;
-  tag: string;
-  title: string;
-}) {
-  const sourceName = getLinkSourceName(sourceUrl);
-  const cleanShareText = getUsefulShareText(rawSourceText, sourceUrl);
-  const signal = cleanShareText || title.trim() || note.trim() || `${city.title} ${tag}灵感`;
+function getLinkSourceKind(sourceUrl: string) {
+  try {
+    const host = new URL(sourceUrl).hostname.replace(/^www\./, '');
 
-  return [
-    `来源：${sourceName}`,
-    `可能主题：${clipText(signal, 56)}`,
-    `适合放进：${city.title} · ${tag}`,
-    '待核对：具体地址、开放时间、预约方式、交通耗时、费用。',
-  ].join('\n');
+    if (host.includes('xiaohongshu') || host.includes('xhslink')) {
+      return 'xiaohongshu';
+    }
+
+    if (host.includes('douyin') || host.includes('iesdouyin')) {
+      return 'douyin';
+    }
+
+    if (host.includes('feishu') || host.includes('larksuite')) {
+      return 'feishu';
+    }
+  } catch {
+    return 'other';
+  }
+
+  return 'other';
+}
+
+function isSupportedInspirationLink(sourceUrl: string) {
+  const sourceKind = getLinkSourceKind(sourceUrl);
+
+  return sourceKind === 'xiaohongshu' || sourceKind === 'douyin';
 }
 
 function buildGuideDocSummaryDraft({

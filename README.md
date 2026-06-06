@@ -8,7 +8,7 @@ Tripmates is a lightweight Expo app for a small group of friends to build a priv
 - City-card home screen with a detail page for each city.
 - Four travel boards: ideas, guides, itinerary, and memories.
 - A short in-app usage guide for the city-first workflow.
-- Inspiration entries can store a note, a Xiaohongshu/Douyin/web source link, and an editable summary draft.
+- Inspiration entries can store a Xiaohongshu/Douyin source link plus a short note for later Codex整理.
 - Guide entries can be generated from the current city's inspiration board as a day-by-day draft.
 - Guide entries can store a Feishu/Lark document link as their source.
 - Itinerary entries can be generated from the current city's guide board and linked guide documents.
@@ -129,7 +129,18 @@ The current preview runtime is `1.0.0`, so JavaScript-only updates can keep targ
 
 ## AI Generation Path
 
-The current app can create local, editable drafts from pasted inspiration links, Feishu/Lark document links, and existing notes. It does not yet fetch or understand Xiaohongshu/Douyin pages or Feishu document bodies on its own. Real AI summarization should run server-side, for example:
+The current app does not perform real AI summarization in the phone client. For this private friends-only workflow, the near-term path is:
+
+```text
+Friends collect Xiaohongshu/Douyin links in Tripmates
+-> sync/export the city inspiration list
+-> use Codex manually to read and整理 link contents
+-> save the resulting guide or itinerary back into Tripmates/Feishu
+```
+
+Xiaohongshu image-text posts, long notes, and Douyin posts with clear captions are easier to organize than pure short videos because they usually include explicit names, addresses, prices, route order, and caveats. For short videos, add a one-line note in Tripmates explaining why it is worth saving.
+
+Later, real AI summarization can run server-side. The app still should not fetch or understand Xiaohongshu/Douyin pages or Feishu document bodies on its own. A production path would be:
 
 ```text
 App -> Supabase Edge Function -> link/doc fetcher -> AI model API -> saved ai_summary / guide draft / itinerary draft
@@ -141,8 +152,9 @@ Keeping model calls and Feishu credentials on the server avoids putting private 
 
 1. Smoke test Supabase auth on a physical iOS and Android device.
 2. Install the first OTA-enabled Android preview APK on a real phone.
-3. Replace local draft generation with a Supabase Edge Function AI summarizer and Feishu document reader.
-4. Publish and verify each small capability through the `preview` channel OTA flow.
-5. Replace manual sync with realtime updates and conflict handling.
-6. Add generated invite links that open a specific city in the app.
-7. Add maps, link previews, and photo memories.
+3. Add an export/share view that turns a city's inspirations into Codex-ready text.
+4. Replace local draft generation with a Supabase Edge Function AI summarizer and Feishu document reader when the manual Codex workflow is proven.
+5. Publish and verify each small capability through the `preview` channel OTA flow.
+6. Replace manual sync with realtime updates and conflict handling.
+7. Add generated invite links that open a specific city in the app.
+8. Add maps, link previews, and photo memories.
