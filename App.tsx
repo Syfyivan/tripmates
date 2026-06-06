@@ -50,6 +50,9 @@ const syncLabels: Record<CityEntry['syncStatus'], string> = {
   error: '待重试',
 };
 
+const appCapabilityVersion = '功能版本 2026-06-06.2';
+const updateSuccessSignal = '看到“收集灵感”和“小红书 / 抖音链接”就是新版本。';
+
 type UpdateStatus = 'idle' | 'unsupported' | 'checking' | 'downloading' | 'ready' | 'restarting' | 'error';
 
 export default function App() {
@@ -1092,6 +1095,16 @@ function UpdatePanel({
         </View>
         <Text style={styles.updateMessage}>{message}</Text>
         <Text style={styles.updateMeta}>{getUpdateRuntimeLabel()}</Text>
+        <Text style={styles.updateMeta}>{appCapabilityVersion}</Text>
+        <View style={styles.updateHelpBox}>
+          <Text style={styles.updateHelpText}>{updateSuccessSignal}</Text>
+          <Text style={styles.updateHelpText}>
+            如果还显示“添加到灵感”，点检查更新；下载后必须点“重启更新”。
+          </Text>
+          <Text style={styles.updateHelpText}>
+            仍无变化时，安装 Android build 2 的 APK。
+          </Text>
+        </View>
       </View>
       <Pressable
         accessibilityRole="button"
@@ -1264,8 +1277,10 @@ function UsageGuide() {
       <Text style={styles.sectionLabel}>使用说明</Text>
       <Text style={styles.guideText}>1. 首页先建城市卡片，比如新疆、广西。</Text>
       <Text style={styles.guideText}>2. 点进城市后，把内容分到灵感、攻略、行程、回忆。</Text>
-      <Text style={styles.guideText}>3. 灵感可以自己写，也可以先贴小红书、抖音或网页链接。</Text>
-      <Text style={styles.guideText}>4. 登录后可以同步当前城市，再用邀请码邀请朋友加入。</Text>
+      <Text style={styles.guideText}>3. 灵感页标题是“收集灵感”时，标题下面可以贴小红书、抖音或网页链接。</Text>
+      <Text style={styles.guideText}>4. 攻略页可以贴飞书文档链接，行程页可以按攻略生成草稿。</Text>
+      <Text style={styles.guideText}>5. 如果仍看到“添加到灵感”，说明还在旧版本；回到顶部检查更新或安装新版 APK。</Text>
+      <Text style={styles.guideText}>6. 登录后可以同步当前城市，再用邀请码邀请朋友加入。</Text>
     </View>
   );
 }
@@ -1645,6 +1660,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 18,
     marginTop: 4,
+  },
+  updateHelpBox: {
+    backgroundColor: '#f6f8fb',
+    borderColor: '#dfe7f1',
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+    padding: 10,
+  },
+  updateHelpText: {
+    color: '#526071',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   updateButton: {
     alignItems: 'center',

@@ -110,6 +110,23 @@ npx eas-cli@latest update --channel preview --message "Short update note" --envi
 
 Users must first install a build created after EAS Update was configured. Updates that change native code or native configuration still require a new APK build, for example installing a new native module, changing permissions, changing app icons or splash screens, upgrading Expo SDK, or changing the native runtime.
 
+#### If OTA Does Not Appear
+
+Use visible UI text to confirm whether the phone is on the latest capability set:
+
+- Updated: the inspiration composer title says `收集灵感`, and a `小红书 / 抖音链接` field appears under the title input.
+- Old embedded build: the inspiration composer still says `添加到灵感`, and there is no link field.
+
+Troubleshooting order:
+
+1. Scroll to the top of the city detail page and find `应用更新`.
+2. Tap `检查更新`.
+3. If the panel says a new version was downloaded, tap `重启更新`.
+4. Force close and reopen the app if the UI still looks old.
+5. If it still does not change, install the latest Android preview APK. The Android `versionCode` should be higher than the old installed package so Android treats it as an upgrade.
+
+The current preview runtime is `1.0.0`, so JavaScript-only updates can keep targeting `preview` / runtime `1.0.0`.
+
 ## AI Generation Path
 
 The current app can create local, editable drafts from pasted inspiration links, Feishu/Lark document links, and existing notes. It does not yet fetch or understand Xiaohongshu/Douyin pages or Feishu document bodies on its own. Real AI summarization should run server-side, for example:
