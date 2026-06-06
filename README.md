@@ -110,12 +110,18 @@ npx eas-cli@latest update --channel preview --message "Short update note" --envi
 
 Users must first install a build created after EAS Update was configured. Updates that change native code or native configuration still require a new APK build, for example installing a new native module, changing permissions, changing app icons or splash screens, upgrading Expo SDK, or changing the native runtime.
 
+### Versioning Rule
+
+Every user-visible update should bump the in-app version label shown in `应用更新`. Use `版本 1.0.x · 功能 YYYY-MM-DD.n` so friends can tell which update they are seeing on their phones.
+
+When shipping a new Android APK, also bump `android.versionCode` in `app.json`. JavaScript-only OTA updates can keep `expo.version` and runtime `1.0.0` unchanged so they remain compatible with the installed preview APK.
+
 #### If OTA Does Not Appear
 
-Use visible UI text to confirm whether the phone is on the latest capability set:
+Use the visible version label in `应用更新` to confirm whether the phone is on the latest capability set:
 
-- Updated: the inspiration composer title says `收集灵感`, and a `小红书 / 抖音链接` field appears under the title input.
-- Old embedded build: the inspiration composer still says `添加到灵感`, and there is no link field.
+- Updated: the version label matches the latest release note or commit message.
+- Old embedded build: the version label is missing or lower than the latest release.
 
 Troubleshooting order:
 

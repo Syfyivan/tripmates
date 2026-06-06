@@ -51,7 +51,7 @@ const syncLabels: Record<CityEntry['syncStatus'], string> = {
   error: '待重试',
 };
 
-const appCapabilityVersion = '功能版本 2026-06-06.4';
+const appCapabilityVersion = '版本 1.0.6 · 功能 2026-06-06.4';
 const updateSuccessSignal = '看到更紧凑的卡片和浅黄色生成提醒就是新版本。';
 
 type UpdateStatus = 'idle' | 'unsupported' | 'checking' | 'downloading' | 'ready' | 'restarting' | 'error';
